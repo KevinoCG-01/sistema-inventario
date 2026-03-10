@@ -236,7 +236,7 @@ function normalizarTurno(turno) {
     return null;
 }
 app.get("/", (req, res) => {
-    res.send("Servidor funcionando ðŸ”¥");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 ///////////////////////////////////////////
