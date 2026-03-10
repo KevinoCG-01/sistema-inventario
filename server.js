@@ -15,12 +15,10 @@ const PASS_COL = "\"contrase\u00f1a\"";
 const APP_PORT = Number(process.env.PORT || 3000);
 
 const pool = new Pool({
-    user: process.env.DB_USER || "postgres",
-    host: process.env.DB_HOST || "localhost",
-    database: process.env.DB_NAME || "sistema_inventario",
-    password: process.env.DB_PASSWORD || "",
-    port: Number(process.env.DB_PORT || 6000),
-    ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 function generarBufferInventarioConAlerta(rows, nombreHoja, campoCantidad) {
