@@ -132,7 +132,7 @@ if (bienvenidaTecnico) {
 /* ================= CARGAR LINEAS ================= */
 
 async function cargarLineas() {
-    const res = await fetch("http://localhost:3000/lineas");
+    const res = await fetch("/lineas");
     const data = await res.json();
 
     const select = document.getElementById("linea_select");
@@ -149,7 +149,7 @@ async function cargarLineas() {
 /* ================= CARGAR EQUIPOS DISPONIBLES ================= */
 
 async function cargarEquipos() {
-    const res = await fetch("http://localhost:3000/equipos-disponibles");
+    const res = await fetch("/equipos-disponibles");
     const data = await res.json();
 
     const select = document.getElementById("equipo_select");
@@ -170,7 +170,7 @@ async function cargarEquipos() {
 async function cargarAsignaciones() {
 
     const res = await fetch(
-        `http://localhost:3000/asignaciones/activo/${usuario.id}`
+        `/asignaciones/activo/${usuario.id}`
     );
 
     const data = await res.json();
@@ -252,7 +252,7 @@ async function procesarAccion() {
 
     if (tipo === "requisicion") {
 
-        const response = await fetch("http://localhost:3000/asignaciones/solicitar", {
+        const response = await fetch("/asignaciones/solicitar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -281,7 +281,7 @@ async function procesarAccion() {
 
 async function devolver(id) {
 
-    const response = await fetch(`http://localhost:3000/asignaciones/${id}/solicitar-devolucion`, {
+    const response = await fetch(`/asignaciones/${id}/solicitar-devolucion`, {
         method: "PUT"
     });
 
@@ -315,6 +315,7 @@ setInterval(() => {
 
 </body>
 </html>
+
 
 
 

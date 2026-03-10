@@ -168,7 +168,7 @@
         try {
             const respuestas = await Promise.all(
                 ROLES_HORARIO.map(rol =>
-                    fetch(`http://localhost:3000/horarios-login?rol=${rol}`)
+                    fetch(`/horarios-login?rol=${rol}`)
                         .then(r => r.ok ? r.json() : [])
                         .catch(() => [])
                 )
@@ -213,7 +213,7 @@
         msg.innerText = "";
 
         try {
-            const response = await fetch("http://localhost:3000/login", {
+            const response = await fetch("/login", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -249,3 +249,4 @@
 
 </body>
 </html>
+

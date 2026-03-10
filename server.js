@@ -1,4 +1,4 @@
-const path = require("path");
+﻿require("dotenv").config();
 const express = require("express");
 const { Pool } = require("pg");
 const cors = require("cors");
@@ -12,11 +12,15 @@ app.use(express.static("public"));
 
 const PASS_COL = "\"contrase\u00f1a\"";
 
+const APP_PORT = Number(process.env.PORT || 3000);
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+    user: process.env.DB_USER || "postgres",
+    host: process.env.DB_HOST || "localhost",
+    database: process.env.DB_NAME || "sistema_inventario",
+    password: process.env.DB_PASSWORD || "",
+    port: Number(process.env.DB_PORT || 6000),
+    ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false
 });
 
 function generarBufferInventarioConAlerta(rows, nombreHoja, campoCantidad) {
@@ -237,7 +241,7 @@ function normalizarTurno(turno) {
     return null;
 }
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "login.html"));
+    res.send("Servidor funcionando ðŸ”¥");
 });
 
 ///////////////////////////////////////////
@@ -2661,16 +2665,16 @@ Promise.all([
     asegurarEstructuraHerramientaModulo()
 ])
     .then(() => {
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Servidor corriendo en puerto " + PORT);
-});
+        app.listen(APP_PORT, () => {
+            console.log(`Servidor corriendo en puerto ${APP_PORT}`);
+        });
     })
     .catch((error) => {
         console.error("No se pudo iniciar por error de integridad:", error);
         process.exit(1);
     });
+
+
 
 
 

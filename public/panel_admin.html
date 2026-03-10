@@ -564,7 +564,7 @@ if (activa === "lineas") {
 
 async function cargarLineas(){
 try{
-    const res = await fetch("http://localhost:3000/lineas");
+    const res = await fetch("/lineas");
 
     if(!res.ok){
         if(res.status === 401 || res.status === 403){
@@ -625,7 +625,7 @@ try{
 async function agregarLinea(){
 const nombre=document.getElementById("nombre_linea").value;
 
-await fetch("http://localhost:3000/lineas",{
+await fetch("/lineas",{
 method:"POST",
 headers:{ "Content-Type":"application/json"},
 body:JSON.stringify({nombre})
@@ -636,7 +636,7 @@ cargarLineas();
 
 async function eliminarLinea(id){
 if(!confirm("Â¿Eliminar lÃ­nea?")) return;
-await fetch(`http://localhost:3000/lineas/${id}`,{method:"DELETE"});
+await fetch(`/lineas/${id}`,{method:"DELETE"});
 cargarLineas();
 }
 
@@ -650,7 +650,7 @@ alert("El nombre no puede estar vacÃ­o");
 return;
 }
 
-const res = await fetch(`http://localhost:3000/lineas/${id}`,{
+const res = await fetch(`/lineas/${id}`,{
 method:"PUT",
 headers:{ "Content-Type":"application/json" },
 body: JSON.stringify({ nombre })
@@ -671,8 +671,8 @@ cargarLineas();
 async function cargarMateriales(busqueda = ""){
 
 const url = busqueda 
-? `http://localhost:3000/materiales?buscar=${busqueda}`
-: "http://localhost:3000/materiales";
+? `/materiales?buscar=${busqueda}`
+: "/materiales";
 
 const res = await fetch(url);
 const data = await res.json();
@@ -720,7 +720,7 @@ async function sumarStock(id){
 const cantidad = document.getElementById("sumar_"+id).value;
 if(!cantidad || cantidad<=0){ alert("Cantidad invalida"); return; }
 
-await fetch(`http://localhost:3000/materiales/${id}/stock`,{
+await fetch(`/materiales/${id}/stock`,{
 method:"PUT",
 headers:{ "Content-Type":"application/json"},
 body:JSON.stringify({ nuevo_stock: "+"+cantidad })
@@ -748,7 +748,7 @@ alert("Precio unitario invalido");
 return;
 }
 
-const response=await fetch("http://localhost:3000/materiales",{
+const response=await fetch("/materiales",{
 method:"POST",
 headers:{ "Content-Type":"application/json"},
 body:JSON.stringify(material)
@@ -770,7 +770,7 @@ cargarMateriales();
 
 async function eliminarMaterial(id){
 if(!confirm("Â¿Eliminar material?")) return;
-await fetch(`http://localhost:3000/materiales/${id}`,{method:"DELETE"});
+await fetch(`/materiales/${id}`,{method:"DELETE"});
 cargarMateriales();
 }
 
@@ -820,7 +820,7 @@ alert("Precio unitario invalido");
 return;
 }
 
-const response = await fetch(`http://localhost:3000/materiales/${id}`,{
+const response = await fetch(`/materiales/${id}`,{
 method:"PUT",
 headers:{ "Content-Type":"application/json"},
 body:JSON.stringify({ nombre, tipo, stock_minimo, precio_unitario, cantidad_stock })
@@ -839,8 +839,8 @@ cargarMateriales();
 
 async function cargarHerramientasModulo(busqueda = ""){
 const url = busqueda
-? `http://localhost:3000/herramienta-modulo?buscar=${busqueda}`
-: "http://localhost:3000/herramienta-modulo";
+? `/herramienta-modulo?buscar=${busqueda}`
+: "/herramienta-modulo";
 
 const res = await fetch(url);
 const data = await res.json();
@@ -909,7 +909,7 @@ alert("Precio invalido");
 return;
 }
 
-const response = await fetch("http://localhost:3000/herramienta-modulo", {
+const response = await fetch("/herramienta-modulo", {
 method:"POST",
 headers:{ "Content-Type":"application/json" },
 body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
@@ -937,7 +937,7 @@ alert("Cantidad invalida");
 return;
 }
 
-const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}/cantidad`, {
+const response = await fetch(`/herramienta-modulo/${id}/cantidad`, {
 method:"PUT",
 headers:{ "Content-Type":"application/json" },
 body: JSON.stringify({ cambio: "+" + cantidad })
@@ -989,7 +989,7 @@ alert("Precio invalido");
 return;
 }
 
-const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}`, {
+const response = await fetch(`/herramienta-modulo/${id}`, {
 method:"PUT",
 headers:{ "Content-Type":"application/json" },
 body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
@@ -1006,7 +1006,7 @@ cargarHerramientasModulo();
 
 async function eliminarHerramientaModulo(id){
 if(!confirm("Eliminar herramienta de modulo?")) return;
-const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}`, { method:"DELETE" });
+const response = await fetch(`/herramienta-modulo/${id}`, { method:"DELETE" });
 if(!response.ok){
 const data = await response.json().catch(() => ({}));
 alert(data.error || "No se pudo eliminar");
@@ -1024,7 +1024,7 @@ return "Funcional";
 }
 
 async function actualizarCondicionEquipo(id, condicion){
-const response = await fetch(`http://localhost:3000/equipos-individuales/${id}/condicion`, {
+const response = await fetch(`/equipos-individuales/${id}/condicion`, {
 method:"PUT",
 headers:{ "Content-Type":"application/json"},
 body: JSON.stringify({ condicion })
@@ -1044,7 +1044,7 @@ cargarEquiposAdmin();
 async function devolverManualEquipo(id){
 if(!confirm("Confirmar devolucion manual de este equipo?")) return;
 
-const response = await fetch(`http://localhost:3000/equipos-individuales/${id}/devolver-manual`, {
+const response = await fetch(`/equipos-individuales/${id}/devolver-manual`, {
 method:"PUT"
 });
 
@@ -1060,7 +1060,7 @@ cargarSolicitudes();
 cargarMaterialPorLinea();
 }
 async function cargarEquiposAdmin(){
-const res=await fetch("http://localhost:3000/equipos-individuales");
+const res=await fetch("/equipos-individuales");
 const data=await res.json();
 
 const tabla=document.getElementById("tabla_equipos");
@@ -1104,7 +1104,7 @@ numero_activo: document.getElementById("numero_activo").value.trim(),
 ubicacion: document.getElementById("ubicacion_equipo").value
 };
 
-const response = await fetch("http://localhost:3000/equipos-individuales",{
+const response = await fetch("/equipos-individuales",{
 method:"POST",
 headers:{ "Content-Type":"application/json"},
 body: JSON.stringify(equipo)
@@ -1128,7 +1128,7 @@ cargarEquiposAdmin();
 
 async function eliminarEquipo(id){
 if(!confirm("Â¿Eliminar equipo?")) return;
-await fetch(`http://localhost:3000/equipos-individuales/${id}`,{method:"DELETE"});
+await fetch(`/equipos-individuales/${id}`,{method:"DELETE"});
 cargarEquiposAdmin();
 }
 
@@ -1161,7 +1161,7 @@ const ubicacionNueva = prompt("Editar ubicacion:", ubicacionActual || "");
 if(ubicacionNueva === null) return;
 const ubicacion = ubicacionNueva.trim();
 
-const response = await fetch(`http://localhost:3000/equipos-individuales/${id}`,{
+const response = await fetch(`/equipos-individuales/${id}`,{
 method:"PUT",
 headers:{ "Content-Type":"application/json"},
 body: JSON.stringify({ nombre, descripcion, numero_serie, numero_activo, ubicacion })
@@ -1194,7 +1194,7 @@ async function cargarSolicitudes(){
     tabla.innerHTML = "";
 
     // ðŸ”µ Solicitudes nuevas
-    const resPendientes = await fetch("http://localhost:3000/asignaciones/pendientes");
+    const resPendientes = await fetch("/asignaciones/pendientes");
     const pendientes = await resPendientes.json();
 
     pendientes.forEach(s=>{
@@ -1212,7 +1212,7 @@ async function cargarSolicitudes(){
     });
 
     // ðŸŸ¡ Devoluciones pendientes
-    const resDev = await fetch("http://localhost:3000/asignaciones/devoluciones-pendientes");
+    const resDev = await fetch("/asignaciones/devoluciones-pendientes");
     const devoluciones = await resDev.json();
 
     devoluciones.forEach(s=>{
@@ -1237,7 +1237,7 @@ async function cargarSolicitudes(){
 async function aprobarSolicitud(id){
 
     const response = await fetch(
-        `http://localhost:3000/asignaciones/${id}/aprobar`,
+        `/asignaciones/${id}/aprobar`,
         { method:"PUT" }
     );
 
@@ -1252,7 +1252,7 @@ async function aprobarSolicitud(id){
 async function rechazarSolicitud(id){
 
     const response = await fetch(
-        `http://localhost:3000/asignaciones/${id}/rechazar`,
+        `/asignaciones/${id}/rechazar`,
         { method:"PUT" }
     );
 
@@ -1267,7 +1267,7 @@ async function rechazarSolicitud(id){
 async function aprobarDevolucion(id){
 
     const response = await fetch(
-        `http://localhost:3000/asignaciones/${id}/aprobar-devolucion`,
+        `/asignaciones/${id}/aprobar-devolucion`,
         { method:"PUT" }
     );
 
@@ -1281,7 +1281,7 @@ async function aprobarDevolucion(id){
 async function rechazarDevolucion(id){
 
     const response = await fetch(
-        `http://localhost:3000/asignaciones/${id}/rechazar-devolucion`,
+        `/asignaciones/${id}/rechazar-devolucion`,
         { method:"PUT" }
     );
 
@@ -1298,7 +1298,7 @@ async function cargarMaterialPorLinea(){
 const linea = document.getElementById("filtro_linea_material")?.value || "todas";
 const seccion = document.getElementById("filtro_seccion_material")?.value || "todas";
 
-const url = `http://localhost:3000/materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
+const url = `/materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
 const res = await fetch(url);
 const data = await res.json();
 
@@ -1334,7 +1334,7 @@ const linea = document.getElementById("filtro_linea_material")?.value || "todas"
 const seccion = document.getElementById("filtro_seccion_material")?.value || "todas";
 
 window.location.href =
-`http://localhost:3000/exportar-materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
+`/exportar-materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
 }
 
 /* ================= USUARIOS ================= */
@@ -1408,7 +1408,7 @@ function renderizarTablaUsuarios(filtro = ""){
 
 async function cargarUsuarios(){
     try {
-        const res = await fetch("http://localhost:3000/usuarios");
+        const res = await fetch("/usuarios");
         const data = await res.json().catch(() => []);
 
         if (!res.ok) {
@@ -1446,7 +1446,7 @@ async function crearUsuario(){
         return;
     }
 
-    const res = await fetch("http://localhost:3000/usuarios", {
+    const res = await fetch("/usuarios", {
         method: "POST",
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({
@@ -1504,7 +1504,7 @@ async function editarUsuario(id, nombreActual, numeroActual, rolActual){
     const passNueva = prompt("Nueva contrasena (opcional, deja vacio para mantener):", "");
     if (passNueva === null) return;
 
-    const res = await fetch(`http://localhost:3000/usuarios/${id}`, {
+    const res = await fetch(`/usuarios/${id}`, {
         method: "PUT",
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({
@@ -1526,7 +1526,7 @@ async function editarUsuario(id, nombreActual, numeroActual, rolActual){
 
 async function actualizarEstadoUsuario(id, activoActual){
     const siguiente = !activoActual;
-    const res = await fetch(`http://localhost:3000/usuarios/${id}/estado`, {
+    const res = await fetch(`/usuarios/${id}/estado`, {
         method: "PUT",
         headers: { "Content-Type":"application/json" },
         body: JSON.stringify({ activo: siguiente })
@@ -1544,7 +1544,7 @@ async function actualizarEstadoUsuario(id, activoActual){
 async function eliminarUsuario(id){
     if (!confirm("Eliminar usuario?")) return;
 
-    const res = await fetch(`http://localhost:3000/usuarios/${id}`, { method: "DELETE" });
+    const res = await fetch(`/usuarios/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         alert(data.error || "No se pudo eliminar usuario");
@@ -1566,7 +1566,7 @@ async function cargarHorariosLogin(){
     if(!tabla) return;
 
     try {
-        const res = await fetch(`http://localhost:3000/horarios-login?rol=${encodeURIComponent(rol)}`);
+        const res = await fetch(`/horarios-login?rol=${encodeURIComponent(rol)}`);
         const data = await res.json();
 
         if(!res.ok){
@@ -1614,7 +1614,7 @@ async function agregarHorarioLogin(){
         return;
     }
 
-    const res = await fetch("http://localhost:3000/horarios-login", {
+    const res = await fetch("/horarios-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rol, dia_semana, hora_inicio, hora_fin, activo: true })
@@ -1653,7 +1653,7 @@ async function editarHorarioLogin(id, diaActual, inicioActual, finActual, activo
     if(activoTexto === null) return;
     const activo = !/^(no|n|0|false)$/i.test(String(activoTexto).trim());
 
-    const res = await fetch(`http://localhost:3000/horarios-login/${id}`, {
+    const res = await fetch(`/horarios-login/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1676,7 +1676,7 @@ async function editarHorarioLogin(id, diaActual, inicioActual, finActual, activo
 async function eliminarHorarioLogin(id){
     if(!confirm("Eliminar horario?")) return;
 
-    const res = await fetch(`http://localhost:3000/horarios-login/${id}`, { method: "DELETE" });
+    const res = await fetch(`/horarios-login/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if(!res.ok){
         alert(data.error || "No se pudo eliminar horario");
@@ -1730,11 +1730,11 @@ window.fetch = (input, init = {}) => {
 
 /* ================= EXPORTAR ================= */
 function exportarInventario(){
-    window.location.href="http://localhost:3000/exportar-inventario";
+    window.location.href="/exportar-inventario";
 }
 
 function exportarInventarioHerramientaModulo(){
-    window.location.href="http://localhost:3000/exportar-inventario-herramienta-modulo";
+    window.location.href="/exportar-inventario-herramienta-modulo";
 }
 
 function exportarRequisiciones(){
@@ -1753,7 +1753,7 @@ function exportarRequisiciones(){
     }
 
     window.location.href=
-    `http://localhost:3000/exportar-requisiciones?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
+    `/exportar-requisiciones?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
 }
 
 function exportarRequisicionesModulo(){
@@ -1772,7 +1772,7 @@ function exportarRequisicionesModulo(){
     }
 
     window.location.href=
-    `http://localhost:3000/exportar-requisiciones-modulo?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
+    `/exportar-requisiciones-modulo?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
 }
 /* ================= INICIO ================= */
 
@@ -1792,6 +1792,7 @@ setInterval(() => {
 </script>
 </body>
 </html>
+
 
 
 

@@ -223,7 +223,7 @@ function actualizarTurnoActualEmpleado() {
 }
 
 async function cargarLineas() {
-    const response = await fetch("http://localhost:3000/lineas");
+    const response = await fetch("/lineas");
     const data = await response.json();
 
     const select = document.getElementById("linea_select");
@@ -245,10 +245,10 @@ async function cargarMateriales() {
 
     let data = [];
     if (tipoOrigen === "modulo") {
-        const response = await fetch("http://localhost:3000/herramienta-modulo");
+        const response = await fetch("/herramienta-modulo");
         data = await response.json();
     } else {
-        const response = await fetch("http://localhost:3000/materiales");
+        const response = await fetch("/materiales");
         data = await response.json();
     }
 
@@ -277,7 +277,7 @@ async function cargarResumenMaterialLinea() {
     }
 
     const nombreLinea = lineaSelect.options[lineaSelect.selectedIndex].text;
-    const url = `http://localhost:3000/materiales-por-linea?linea=${encodeURIComponent(nombreLinea)}&seccion=${encodeURIComponent(tipoOrigen)}`;
+    const url = `/materiales-por-linea?linea=${encodeURIComponent(nombreLinea)}&seccion=${encodeURIComponent(tipoOrigen)}`;
     const response = await fetch(url);
     const data = await response.json().catch(() => []);
 
@@ -343,7 +343,7 @@ async function cargarRequisicionesEnviadas(){
     const tabla = document.getElementById("tabla_requisiciones_enviadas");
     if(!tabla) return;
 
-    const response = await fetch(`http://localhost:3000/requisiciones/usuario/${usuario_id}`);
+    const response = await fetch(`/requisiciones/usuario/${usuario_id}`);
     const data = await response.json().catch(() => []);
 
     if(!response.ok){
@@ -563,7 +563,7 @@ async function enviarRequisicion() {
     const tipo_origen = document.getElementById("tipo_origen").value;
     const turno = actualizarTurnoActualEmpleado();
 
-    const response = await fetch("http://localhost:3000/requisiciones", {
+    const response = await fetch("/requisiciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -627,6 +627,7 @@ setInterval(() => {
 
 </body>
 </html>
+
 
 
 

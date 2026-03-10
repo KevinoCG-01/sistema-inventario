@@ -291,18 +291,18 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
 }
 
 async function cargarRequisiciones() {
-    await renderRequisiciones("requisiciones", "http://localhost:3000/requisiciones-detalle?origen=ensamble", "entrega_", "ensamble");
+    await renderRequisiciones("requisiciones", "/requisiciones-detalle?origen=ensamble", "entrega_", "ensamble");
 }
 
 async function cargarRequisicionesModulo() {
-    await renderRequisiciones("requisiciones_modulo", "http://localhost:3000/requisiciones-detalle?origen=modulo", "entrega_mod_", "modulo");
+    await renderRequisiciones("requisiciones_modulo", "/requisiciones-detalle?origen=modulo", "entrega_mod_", "modulo");
 }
 
 async function cargarRequisicionesCerradas() {
     const fechaInicio = document.getElementById("cerradas_desde")?.value || "";
     const fechaFin = document.getElementById("cerradas_hasta")?.value || "";
 
-    let url = "http://localhost:3000/requisiciones-cerradas?origen=ensamble";
+    let url = "/requisiciones-cerradas?origen=ensamble";
     if (fechaInicio) url += `&fecha_inicio=${encodeURIComponent(fechaInicio)}`;
     if (fechaFin) url += `&fecha_fin=${encodeURIComponent(fechaFin)}`;
 
@@ -365,7 +365,7 @@ async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoI
         return;
     }
 
-    await fetch("http://localhost:3000/entregar-material", {
+    await fetch("/entregar-material", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -385,7 +385,7 @@ async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoI
 async function rechazarRequisicion(requisicion_id, detalleTipo = "ensamble") {
     if (!confirm("Esta accion cancelara toda la requisicion. Deseas continuar?")) return;
 
-    const response = await fetch(`http://localhost:3000/requisiciones/${requisicion_id}/rechazar`, {
+    const response = await fetch(`/requisiciones/${requisicion_id}/rechazar`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ origen: detalleTipo })
@@ -421,7 +421,7 @@ function fechaTexto(v){
 }
 
 async function cargarEquiposAprobados() {
-    const res = await fetch("http://localhost:3000/asignaciones/aprobadas");
+    const res = await fetch("/asignaciones/aprobadas");
     const data = await res.json();
 
     const tabla = document.getElementById("tabla_equipos_aprobados");
@@ -441,7 +441,7 @@ async function cargarEquiposAprobados() {
 }
 
 async function cargarEquiposAsignados() {
-    const res = await fetch("http://localhost:3000/asignaciones/tecnicos-asignados");
+    const res = await fetch("/asignaciones/tecnicos-asignados");
     const data = await res.json();
 
     const tabla = document.getElementById("tabla_equipos_asignados");
@@ -466,7 +466,7 @@ async function cargarEquiposAsignados() {
 }
 
 async function cargarEstatusEquipos() {
-    const res = await fetch("http://localhost:3000/asignaciones/estatus");
+    const res = await fetch("/asignaciones/estatus");
     const data = await res.json();
 
     const tabla = document.getElementById("tabla_estatus_equipos");
@@ -502,7 +502,7 @@ async function cargarTablasEquipos(){
 }
 
 async function entregar(id) {
-    const response = await fetch(`http://localhost:3000/asignaciones/${id}/entregar`, { method: "PUT" });
+    const response = await fetch(`/asignaciones/${id}/entregar`, { method: "PUT" });
     const data = await response.json();
 
     if (!response.ok) {
@@ -527,6 +527,7 @@ setInterval(() => {
 
 </body>
 </html>
+
 
 
 
