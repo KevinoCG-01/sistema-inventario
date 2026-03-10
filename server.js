@@ -11,8 +11,6 @@ app.use(express.static("public"));
 
 const PASS_COL = "\"contrase\u00f1a\"";
 
-const { Pool } = require("pg");
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
