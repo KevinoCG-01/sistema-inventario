@@ -239,7 +239,7 @@ function normalizarTurno(turno) {
     return null;
 }
 app.get("/", (req, res) => {
-    res.send("Servidor funcionando ðŸ”¥");
+    res.redirect("/login.html");
 });
 
 ///////////////////////////////////////////
