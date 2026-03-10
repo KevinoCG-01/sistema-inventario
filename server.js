@@ -11,12 +11,13 @@ app.use(express.static("public"));
 
 const PASS_COL = "\"contrase\u00f1a\"";
 
+const { Pool } = require("pg");
+
 const pool = new Pool({
-    user: "postgres",
-    host: "localhost",
-    database: "sistema_inventario",
-    password: "9727",
-    port: 6000,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 function generarBufferInventarioConAlerta(rows, nombreHoja, campoCantidad) {
