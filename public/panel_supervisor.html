@@ -1,0 +1,553 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="styles.css">
+    <title>Panel Tecnico de Instrumentacion</title>
+    <style>
+        .imc-encabezado {
+            text-align: center;
+            margin: 0 0 10px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #134e4a;
+            letter-spacing: 0.3px;
+        }
+
+        .titulo-tecnico-instrumentacion {
+            font-size: 2rem;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+<h2 class="imc-encabezado">Instrumentacion Material Control "IMC"</h2>
+<div class="panel-header">
+<h1 class="titulo-tecnico-instrumentacion">Tecnico de Instrumentacion</h1>
+<div class="logout-menu">
+<button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
+<div id="logout-dropdown" class="logout-dropdown">
+<button onclick="cerrarSesion()">Cerrar sesion</button>
+</div>
+</div>
+</div>
+<h2 id="bienvenida"></h2>
+
+<div style="margin-bottom:20px;">
+    <button onclick="mostrarConsumibles()">Ver Consumibles</button>
+    <button onclick="mostrarModulo()">Ver Herramienta Modulo</button>
+    <button onclick="mostrarEquipos()">Ver Equipos</button>
+    <button onclick="mostrarCerradas()">Ver Cerradas</button>
+</div>
+
+<div id="seccion_consumibles" class="card">
+    <h2>Requisiciones de Consumibles</h2>
+    <div id="requisiciones"></div>
+</div>
+
+<div id="seccion_modulo" class="card" style="display:none;">
+    <h2>Requisiciones de Herramienta Modulo</h2>
+    <div id="requisiciones_modulo"></div>
+</div>
+
+<div id="seccion_equipos" class="card" style="display:none;">
+    <h2>Solicitudes de Equipos Aprobadas</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Tecnico de PFA</th>
+                <th>Equipo</th>
+                <th>Linea</th>
+                <th>Fecha Aprobacion</th>
+                <th>Accion</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_equipos_aprobados"></tbody>
+    </table>
+
+    <hr>
+
+    <h2>Equipos Asignados a Tecnicos de PFA</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Tecnico de PFA</th>
+                <th>Equipo</th>
+                <th>Serie</th>
+                <th>Linea</th>
+                <th>Estado</th>
+                <th>Fecha Entrega</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_equipos_asignados"></tbody>
+    </table>
+
+    <hr>
+
+    <h2>Estatus de Requisicion de Equipo</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tecnico de PFA</th>
+                <th>Equipo</th>
+                <th>Linea</th>
+                <th>Estado</th>
+                <th>Solicitud</th>
+                <th>Aprobacion</th>
+                <th>Entrega</th>
+                <th>Devolucion</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_estatus_equipos"></tbody>
+    </table>
+</div>
+
+<div id="seccion_cerradas" class="card" style="display:none;">
+    <h2>Requisiciones Cerradas</h2>
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin-bottom:10px;">
+    <div style="min-width:180px;">
+        <label for="cerradas_desde"><strong>Desde:</strong></label>
+        <input type="date" id="cerradas_desde">
+    </div>
+    <div style="min-width:180px;">
+        <label for="cerradas_hasta"><strong>Hasta:</strong></label>
+        <input type="date" id="cerradas_hasta">
+    </div>
+    <button onclick="aplicarFiltroCerradas()">Filtrar</button>
+</div>
+    <div id="requisiciones_cerradas"></div>
+</div>
+
+</div>
+
+<script>
+
+function estaEditandoFormulario(){
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function toggleLogoutMenu(event){
+    if (event) event.stopPropagation();
+    const menu = document.getElementById("logout-dropdown");
+    if (!menu) return;
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function cerrarSesion(){
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".logout-menu");
+    const menu = document.getElementById("logout-dropdown");
+    if (!wrap || !menu) return;
+    if (!wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+});
+const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+if (!usuario || usuario.rol !== "supervisor") {
+    alert("Acceso no autorizado");
+    window.location.href = "login.html";
+}
+
+document.getElementById("bienvenida").innerText = "Bienvenido " + usuario.nombre;
+
+function mostrarConsumibles() {
+    document.getElementById("seccion_consumibles").style.display = "block";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    cargarRequisiciones();
+}
+
+function mostrarModulo() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "block";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    cargarRequisicionesModulo();
+}
+
+function mostrarEquipos() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_equipos").style.display = "block";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    cargarTablasEquipos();
+}
+
+function mostrarCerradas() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "block";
+    cargarRequisicionesCerradas();
+}
+
+function aplicarFiltroCerradas() {
+    cargarRequisicionesCerradas();
+}
+
+function refrescarSeccionActivaSupervisor() {
+    const consumibles = document.getElementById("seccion_consumibles").style.display !== "none";
+    const modulo = document.getElementById("seccion_modulo").style.display !== "none";
+    const equipos = document.getElementById("seccion_equipos").style.display !== "none";
+    const cerradas = document.getElementById("seccion_cerradas").style.display !== "none";
+
+    if (consumibles) cargarRequisiciones();
+    if (modulo) cargarRequisicionesModulo();
+    if (equipos) cargarTablasEquipos();
+    if (cerradas) cargarRequisicionesCerradas();
+}
+
+async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo) {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    const contenedor = document.getElementById(contenedorId);
+    contenedor.innerHTML = "";
+
+    const agrupadas = {};
+    data.forEach(item => {
+        if (!agrupadas[item.requisicion_id]) {
+            agrupadas[item.requisicion_id] = { info: item, detalles: [] };
+        }
+        agrupadas[item.requisicion_id].detalles.push(item);
+    });
+
+    for (let reqId in agrupadas) {
+        const req = agrupadas[reqId];
+        const div = document.createElement("div");
+        div.className = "card";
+        const tiposMov = [...new Set(
+            req.detalles
+                .map(d => String(d.tipo_movimiento || "").trim().toLowerCase())
+                .filter(Boolean)
+        )];
+        const tiposTexto = tiposMov.length
+            ? tiposMov.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ")
+            : "-";
+
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <h3 style="margin:0;">Requisicion #${reqId}</h3>
+                <button onclick="rechazarRequisicion(${reqId}, '${detalleTipo}')">Rechazar</button>
+            </div>
+            <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
+            <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+            <p><strong>Estado:</strong> ${req.info.estado_general}</p>
+            <p><strong>Tipo movimiento:</strong> ${tiposTexto}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Solicitado</th>
+                        <th>Entregado</th>
+                        <th>Pendiente</th>
+                        <th>Accion</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        req.detalles.forEach(det => {
+            const pendiente = det.cantidad_solicitada - det.cantidad_entregada;
+            let boton = "Completo";
+
+            if (pendiente > 0) {
+                const mov = String(det.tipo_movimiento || "").trim().toLowerCase();
+                const accionTexto = mov.startsWith("retorno")
+                    ? "Recibido"
+                    : "Entregar";
+                boton = `
+                    <input type="number" min="1" max="${pendiente}" id="${prefijoInput}${det.detalle_id}" placeholder="Cantidad" style="width:70px;">
+                    <button onclick="entregarConsumible(${det.detalle_id}, '${detalleTipo}', '${prefijoInput}')">${accionTexto}</button>
+                `;
+            }
+
+            html += `
+                <tr>
+                    <td>${det.material}</td>
+                    <td>${det.cantidad_solicitada}</td>
+                    <td>${det.cantidad_entregada}</td>
+                    <td>${pendiente}</td>
+                    <td>${boton}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        div.innerHTML = html;
+        contenedor.appendChild(div);
+    }
+}
+
+async function cargarRequisiciones() {
+    await renderRequisiciones("requisiciones", "http://localhost:3000/requisiciones-detalle?origen=ensamble", "entrega_", "ensamble");
+}
+
+async function cargarRequisicionesModulo() {
+    await renderRequisiciones("requisiciones_modulo", "http://localhost:3000/requisiciones-detalle?origen=modulo", "entrega_mod_", "modulo");
+}
+
+async function cargarRequisicionesCerradas() {
+    const fechaInicio = document.getElementById("cerradas_desde")?.value || "";
+    const fechaFin = document.getElementById("cerradas_hasta")?.value || "";
+
+    let url = "http://localhost:3000/requisiciones-cerradas?origen=ensamble";
+    if (fechaInicio) url += `&fecha_inicio=${encodeURIComponent(fechaInicio)}`;
+    if (fechaFin) url += `&fecha_fin=${encodeURIComponent(fechaFin)}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    const contenedor = document.getElementById("requisiciones_cerradas");
+    contenedor.innerHTML = "";
+
+    const agrupadas = {};
+    data.forEach(item => {
+        if (!agrupadas[item.requisicion_id]) {
+            agrupadas[item.requisicion_id] = { info: item, detalles: [] };
+        }
+        agrupadas[item.requisicion_id].detalles.push(item);
+    });
+
+    for (let reqId in agrupadas) {
+        const req = agrupadas[reqId];
+        const div = document.createElement("div");
+        div.className = "card";
+
+        let html = `
+            <h3>Requisicion #${reqId}</h3>
+            <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
+            <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+            <p><strong>Estado:</strong> Cerrada</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Solicitado</th>
+                        <th>Entregado</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        req.detalles.forEach(det => {
+            html += `
+                <tr>
+                    <td>${det.material}</td>
+                    <td>${det.cantidad_solicitada}</td>
+                    <td>${det.cantidad_entregada}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        div.innerHTML = html;
+        contenedor.appendChild(div);
+    }
+}
+
+async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoInput = "entrega_") {
+    const cantidad = document.getElementById(prefijoInput + detalle_id).value;
+
+    if (!cantidad || cantidad <= 0) {
+        alert("Ingrese cantidad valida");
+        return;
+    }
+
+    await fetch("http://localhost:3000/entregar-material", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            detalle_id,
+            cantidad_entregada: parseInt(cantidad),
+            detalle_tipo: detalleTipo
+        })
+    });
+
+    if (detalleTipo === "modulo") {
+        cargarRequisicionesModulo();
+    } else {
+        cargarRequisiciones();
+    }
+}
+
+async function rechazarRequisicion(requisicion_id, detalleTipo = "ensamble") {
+    if (!confirm("Esta accion cancelara toda la requisicion. Deseas continuar?")) return;
+
+    const response = await fetch(`http://localhost:3000/requisiciones/${requisicion_id}/rechazar`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origen: detalleTipo })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo rechazar la requisicion");
+        return;
+    }
+
+    if (detalleTipo === "modulo") {
+        cargarRequisicionesModulo();
+    } else {
+        cargarRequisiciones();
+    }
+}
+function formatearEstado(estado){
+    const map = {
+        pendiente: "Pendiente",
+        aprobado: "Aprobado",
+        entregado: "Entregado",
+        pendiente_devolucion: "Pendiente devolucion",
+        devuelto: "Devuelto",
+        rechazado: "Rechazado"
+    };
+    return map[estado] || estado || "-";
+}
+
+function fechaTexto(v){
+    if(!v) return "-";
+    return new Date(v).toLocaleString();
+}
+
+async function cargarEquiposAprobados() {
+    const res = await fetch("http://localhost:3000/asignaciones/aprobadas");
+    const data = await res.json();
+
+    const tabla = document.getElementById("tabla_equipos_aprobados");
+    tabla.innerHTML = "";
+
+    data.forEach(a => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${a.tecnico || "-"}</td>
+            <td>${a.equipo || "-"}</td>
+            <td>${a.linea || "-"}</td>
+            <td>${fechaTexto(a.fecha_aprobacion)}</td>
+            <td><button onclick="entregar(${a.id})">Entregar</button></td>
+        `;
+        tabla.appendChild(fila);
+    });
+}
+
+async function cargarEquiposAsignados() {
+    const res = await fetch("http://localhost:3000/asignaciones/tecnicos-asignados");
+    const data = await res.json();
+
+    const tabla = document.getElementById("tabla_equipos_asignados");
+    tabla.innerHTML = "";
+
+    const enCurso = data.filter(a =>
+        a.estado === "entregado" || a.estado === "pendiente_devolucion"
+    );
+
+    enCurso.forEach(a => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${a.tecnico || "-"}</td>
+            <td>${a.equipo || "-"}</td>
+            <td>${a.numero_serie || "-"}</td>
+            <td>${a.linea || "-"}</td>
+            <td>${formatearEstado(a.estado)}</td>
+            <td>${fechaTexto(a.fecha_entrega)}</td>
+        `;
+        tabla.appendChild(fila);
+    });
+}
+
+async function cargarEstatusEquipos() {
+    const res = await fetch("http://localhost:3000/asignaciones/estatus");
+    const data = await res.json();
+
+    const tabla = document.getElementById("tabla_estatus_equipos");
+    tabla.innerHTML = "";
+
+    const enCurso = data.filter(a =>
+        a.estado === "entregado" || a.estado === "pendiente_devolucion"
+    );
+
+    enCurso.forEach(a => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${a.id}</td>
+            <td>${a.tecnico || "-"}</td>
+            <td>${a.equipo || "-"}</td>
+            <td>${a.linea || "-"}</td>
+            <td>${formatearEstado(a.estado)}</td>
+            <td>${fechaTexto(a.fecha_solicitud)}</td>
+            <td>${fechaTexto(a.fecha_aprobacion)}</td>
+            <td>${fechaTexto(a.fecha_entrega)}</td>
+            <td>${fechaTexto(a.fecha_devolucion)}</td>
+        `;
+        tabla.appendChild(fila);
+    });
+}
+
+async function cargarTablasEquipos(){
+    await Promise.all([
+        cargarEquiposAprobados(),
+        cargarEquiposAsignados(),
+        cargarEstatusEquipos()
+    ]);
+}
+
+async function entregar(id) {
+    const response = await fetch(`http://localhost:3000/asignaciones/${id}/entregar`, { method: "PUT" });
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(data.error || "Error al entregar");
+        return;
+    }
+
+    alert("Equipo entregado correctamente");
+    cargarTablasEquipos();
+}
+
+cargarRequisiciones();
+cargarRequisicionesModulo();
+cargarTablasEquipos();
+cargarRequisicionesCerradas();
+
+setInterval(() => {
+    if (estaEditandoFormulario()) return;
+    refrescarSeccionActivaSupervisor();
+}, 5000);
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

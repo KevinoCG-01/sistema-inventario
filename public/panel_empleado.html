@@ -1,0 +1,662 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="styles.css">
+    <title>Panel Supervisor de PFA</title>
+    <style>
+        .rmi-encabezado {
+            text-align: center;
+            margin: 0 0 10px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #134e4a;
+            letter-spacing: 0.3px;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .btn-eliminar { background-color: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+        .btn-eliminar:hover { background-color: #c82333; }
+        .btn-editar { background-color: #0d6efd; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+        .btn-editar:hover { background-color: #0b5ed7; }
+        .acciones-tabla { display: inline-flex; gap: 8px; justify-content: center; }
+        .tabla-requisicion-wrap { margin-bottom: 28px; }
+        .titulo-material-linea { margin-bottom: 6px; }
+        .tabla-material-linea { margin-top: 0; }
+        .acciones-requisicion { display: flex; align-items: center; gap: 120px; margin-top: 8px; margin-bottom: 6px; }
+        .vistas-empleado { display:flex; gap:12px; margin: 8px 0 10px; }
+        .vista-btn.activo { filter: brightness(0.9); }
+        .filtros-requisiciones { display:flex; gap:10px; flex-wrap:wrap; align-items:end; margin: 6px 0 8px; }
+        .filtros-requisiciones > div { min-width: 170px; }
+        .filtros-requisiciones label { display:block; margin-bottom:4px; font-weight:600; }
+    </style>
+</head>
+<body>
+<div class="container">
+<h2 class="rmi-encabezado">Requisicion de Material de Instrumentacion "RMI"</h2>
+<div class="panel-header">
+<h1>Supervisor de PFA</h1>
+<div class="logout-menu">
+<button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
+<div id="logout-dropdown" class="logout-dropdown">
+<button onclick="cerrarSesion()">Cerrar sesion</button>
+</div>
+</div>
+</div>
+<h2 id="bienvenida"></h2>
+<p><strong>Turno actual:</strong> <span id="turno_actual">-</span></p>
+
+<hr>
+
+<label><strong>Linea de Produccion:</strong></label><br>
+<select id="linea_select"></select>
+<br><br>
+
+<label><strong>Tipo de requisicion:</strong></label><br>
+<select id="tipo_origen">
+    <option value="ensamble">Herramienta de Ajustes</option>
+    <option value="modulo">Herramienta de Modulo</option>
+</select>
+<br><br>
+
+<h2>Crear Requisicion</h2>
+
+<select id="material_select"></select>
+
+<select id="tipo_movimiento">
+    <option value="nuevo">Nuevo</option>
+    <option value="cambio">Cambio</option>
+    <option value="retorno">Retorno</option>
+</select>
+
+<input type="number" id="cantidad" placeholder="Cantidad">
+<div class="acciones-requisicion">
+    <button onclick="agregarMaterial()">Agregar</button>
+    <button onclick="enviarRequisicion()">Enviar Requisicion</button>
+</div>
+
+<h3>Materiales en la requisicion</h3>
+
+<table class="tabla-requisicion-wrap">
+    <thead>
+        <tr>
+            <th>Material</th>
+            <th>Cantidad</th>
+            <th>Tipo</th>
+            <th>Accion</th>
+        </tr>
+    </thead>
+    <tbody id="tabla_requisicion"></tbody>
+</table>
+
+<div class="vistas-empleado">
+    <button id="btn_vista_material" class="vista-btn activo" onclick="mostrarVistaEmpleado('material')">Ver material actual en linea</button>
+    <button id="btn_vista_requisiciones" class="vista-btn" onclick="mostrarVistaEmpleado('requisiciones')">Ver requisiciones enviadas</button>
+</div>
+
+<div id="vista_material_linea">
+    <h3 class="titulo-material-linea">Material actual en la linea</h3>
+    <table class="tabla-material-linea">
+        <thead>
+            <tr>
+                <th>Material</th>
+                <th>Cantidad actual</th>
+                <th>Cambios</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_material_linea_empleado"></tbody>
+    </table>
+</div>
+
+<div id="vista_requisiciones_enviadas" style="display:none;">
+    <h3 class="titulo-material-linea">Mis requisiciones enviadas</h3>
+    <div class="filtros-requisiciones">
+        <div>
+            <label for="filtro_req_linea">Linea</label>
+            <select id="filtro_req_linea">
+                <option value="todas">Todas</option>
+            </select>
+        </div>
+        <div>
+            <label for="filtro_req_fecha_desde">Desde</label>
+            <input type="date" id="filtro_req_fecha_desde">
+        </div>
+        <div>
+            <label for="filtro_req_fecha_hasta">Hasta</label>
+            <input type="date" id="filtro_req_fecha_hasta">
+        </div>
+        <div>
+            <label for="filtro_req_estado">Estado</label>
+            <select id="filtro_req_estado">
+                <option value="todas">Todas</option>
+                <option value="aprobada">Aprobada</option>
+                <option value="rechazada">Rechazada</option>
+                <option value="completa">Completa</option>
+            </select>
+        </div>
+    </div>
+    <table class="tabla-material-linea">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Fecha</th>
+                <th>Linea</th>
+                <th>Seccion</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_requisiciones_enviadas"></tbody>
+    </table>
+</div>
+
+</div>
+
+<script>
+
+function estaEditandoFormulario(){
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function toggleLogoutMenu(event){
+    if (event) event.stopPropagation();
+    const menu = document.getElementById("logout-dropdown");
+    if (!menu) return;
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function cerrarSesion(){
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".logout-menu");
+    const menu = document.getElementById("logout-dropdown");
+    if (!wrap || !menu) return;
+    if (!wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+});
+
+const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+if (!usuario) {
+    alert("Debe iniciar sesion");
+    window.location.href = "login.html";
+}
+
+if (usuario.rol !== "empleado") {
+    alert("Acceso no autorizado para este panel");
+    window.location.href = "login.html";
+}
+
+document.getElementById("bienvenida").innerText = "Bienvenido " + usuario.nombre;
+const usuario_id = usuario.id;
+let materialesRequisicion = [];
+let tipoOrigenActual = document.getElementById("tipo_origen").value;
+let requisicionesEnviadasCache = [];
+
+function calcularTurnoActualEmpleado() {
+    const ahora = new Date();
+    const minutos = (ahora.getHours() * 60) + ahora.getMinutes();
+
+    const inicioTurno1 = (6 * 60) + 24;   // 06:24
+    const finTurno1 = (16 * 60) + 29;     // 16:29
+    const inicioTurno2 = (16 * 60) + 30;  // 16:30
+    const finTurno2 = 1 * 60;             // 01:00
+
+    if (minutos >= inicioTurno1 && minutos <= finTurno1) return "Turno 01";
+    if (minutos >= inicioTurno2 || minutos <= finTurno2) return "Turno 02";
+    return "Fuera de turno";
+}
+
+function actualizarTurnoActualEmpleado() {
+    const turno = calcularTurnoActualEmpleado();
+    const el = document.getElementById("turno_actual");
+    if (el) el.innerText = turno;
+    return turno;
+}
+
+async function cargarLineas() {
+    const response = await fetch("http://localhost:3000/lineas");
+    const data = await response.json();
+
+    const select = document.getElementById("linea_select");
+    const seleccionActual = select.value;
+    select.innerHTML = "";
+
+    data.forEach(linea => {
+        const option = document.createElement("option");
+        option.value = linea.id;
+        option.textContent = linea.nombre;
+        select.appendChild(option);
+    });
+
+    if (seleccionActual) select.value = seleccionActual;
+}
+
+async function cargarMateriales() {
+    const tipoOrigen = document.getElementById("tipo_origen").value;
+
+    let data = [];
+    if (tipoOrigen === "modulo") {
+        const response = await fetch("http://localhost:3000/herramienta-modulo");
+        data = await response.json();
+    } else {
+        const response = await fetch("http://localhost:3000/materiales");
+        data = await response.json();
+    }
+
+    const select = document.getElementById("material_select");
+    const seleccionActual = select.value;
+    select.innerHTML = "";
+
+    data.forEach(mat => {
+        const option = document.createElement("option");
+        option.value = mat.id;
+        option.textContent = `${mat.nombre}`;
+        select.appendChild(option);
+    });
+
+    if (seleccionActual) select.value = seleccionActual;
+}
+
+async function cargarResumenMaterialLinea() {
+    const lineaSelect = document.getElementById("linea_select");
+    const tipoOrigen = document.getElementById("tipo_origen").value;
+    const tabla = document.getElementById("tabla_material_linea_empleado");
+
+    if (!lineaSelect || lineaSelect.selectedIndex < 0) {
+        tabla.innerHTML = `<tr><td colspan="3">Seleccione una linea</td></tr>`;
+        return;
+    }
+
+    const nombreLinea = lineaSelect.options[lineaSelect.selectedIndex].text;
+    const url = `http://localhost:3000/materiales-por-linea?linea=${encodeURIComponent(nombreLinea)}&seccion=${encodeURIComponent(tipoOrigen)}`;
+    const response = await fetch(url);
+    const data = await response.json().catch(() => []);
+
+    tabla.innerHTML = "";
+
+    if (!response.ok) {
+        tabla.innerHTML = `<tr><td colspan="3">Error al cargar datos</td></tr>`;
+        return;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+        tabla.innerHTML = `<tr><td colspan="3">Sin materiales registrados para esta linea</td></tr>`;
+        return;
+    }
+
+    data.forEach(item => {
+        tabla.innerHTML += `
+            <tr>
+                <td>${item.material || "-"}</td>
+                <td>${item.acumulado_nuevo ?? 0}</td>
+                <td>${item.cambios_registrados ?? 0}</td>
+            </tr>
+        `;
+    });
+}
+
+function formatearEstadoRequisicion(estado){
+    const map = {
+        aprobada: "Aprobada",
+        parcial: "Parcial",
+        completa: "Completada",
+        rechazada: "Rechazada",
+        cancelada: "Cancelada",
+        pendiente: "Pendiente"
+    };
+    return map[estado] || estado || "-";
+}
+
+function mostrarVistaEmpleado(vista){
+    const vistaMaterial = document.getElementById("vista_material_linea");
+    const vistaReq = document.getElementById("vista_requisiciones_enviadas");
+    const btnMat = document.getElementById("btn_vista_material");
+    const btnReq = document.getElementById("btn_vista_requisiciones");
+
+    if(vista === "requisiciones"){
+        vistaMaterial.style.display = "none";
+        vistaReq.style.display = "block";
+        btnMat.classList.remove("activo");
+        btnReq.classList.add("activo");
+        cargarRequisicionesEnviadas();
+        return;
+    }
+
+    vistaMaterial.style.display = "block";
+    vistaReq.style.display = "none";
+    btnMat.classList.add("activo");
+    btnReq.classList.remove("activo");
+    cargarResumenMaterialLinea();
+    cargarRequisicionesEnviadas();
+}
+
+async function cargarRequisicionesEnviadas(){
+    const tabla = document.getElementById("tabla_requisiciones_enviadas");
+    if(!tabla) return;
+
+    const response = await fetch(`http://localhost:3000/requisiciones/usuario/${usuario_id}`);
+    const data = await response.json().catch(() => []);
+
+    if(!response.ok){
+        tabla.innerHTML = `<tr><td colspan="5">Error al cargar requisiciones</td></tr>`;
+        return;
+    }
+
+    if(!Array.isArray(data) || data.length === 0){
+        requisicionesEnviadasCache = [];
+        poblarFiltroLineasRequisiciones();
+        tabla.innerHTML = `<tr><td colspan="5">No has enviado requisiciones</td></tr>`;
+        return;
+    }
+
+    requisicionesEnviadasCache = data;
+    poblarFiltroLineasRequisiciones();
+    renderRequisicionesEnviadasFiltradas();
+}
+
+function poblarFiltroLineasRequisiciones(){
+    const filtro = document.getElementById("filtro_req_linea");
+    if(!filtro) return;
+
+    const actual = filtro.value || "todas";
+    filtro.innerHTML = `<option value="todas">Todas</option>`;
+
+    const lineas = [...new Set(
+        requisicionesEnviadasCache
+            .map(r => (r.linea || "-").trim())
+            .filter(Boolean)
+    )].sort((a,b) => a.localeCompare(b, "es"));
+
+    lineas.forEach(linea => {
+        filtro.innerHTML += `<option value="${linea}">${linea}</option>`;
+    });
+
+    if (lineas.includes(actual)) filtro.value = actual;
+}
+
+function fechaLocalYMD(valor){
+    const d = new Date(valor);
+    if (Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+}
+
+function renderRequisicionesEnviadasFiltradas(){
+    const tabla = document.getElementById("tabla_requisiciones_enviadas");
+    if(!tabla) return;
+
+    const linea = document.getElementById("filtro_req_linea")?.value || "todas";
+    const estado = document.getElementById("filtro_req_estado")?.value || "todas";
+    const fechaDesde = document.getElementById("filtro_req_fecha_desde")?.value || "";
+    const fechaHasta = document.getElementById("filtro_req_fecha_hasta")?.value || "";
+
+    const filtradas = requisicionesEnviadasCache.filter(r => {
+        const lineaOk = linea === "todas" || (r.linea || "-") === linea;
+        const estadoValor = String(r.estado_general || "").toLowerCase();
+        const estadoOk = estado === "todas" || estadoValor === estado;
+        const fechaReq = fechaLocalYMD(r.fecha);
+        const desdeOk = !fechaDesde || (fechaReq && fechaReq >= fechaDesde);
+        const hastaOk = !fechaHasta || (fechaReq && fechaReq <= fechaHasta);
+        return lineaOk && estadoOk && desdeOk && hastaOk;
+    });
+
+    tabla.innerHTML = "";
+
+    if (filtradas.length === 0) {
+        tabla.innerHTML = `<tr><td colspan="5">Sin resultados con ese filtro</td></tr>`;
+        return;
+    }
+
+    filtradas.forEach(r => {
+        tabla.innerHTML += `
+            <tr>
+                <td>${r.id}</td>
+                <td>${r.fecha ? new Date(r.fecha).toLocaleString() : "-"}</td>
+                <td>${r.linea || "-"}</td>
+                <td>${r.tipo_origen || "-"}</td>
+                <td>${formatearEstadoRequisicion(r.estado_general)}</td>
+            </tr>
+        `;
+    });
+}
+function renderizarTabla() {
+    const tabla = document.getElementById("tabla_requisicion");
+    tabla.innerHTML = "";
+
+    materialesRequisicion.forEach((item, index) => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${item.nombre}</td>
+            <td>${item.cantidad}</td>
+            <td>${item.tipo_movimiento.toUpperCase()}</td>
+            <td><div class="acciones-tabla"><button class="btn-editar" onclick="editarMaterial(${index})">Editar</button><button class="btn-eliminar" onclick="eliminarMaterial(${index})">Eliminar</button></div></td>
+        `;
+        tabla.appendChild(fila);
+    });
+}
+
+function agregarMaterial() {
+    const tipoOrigen = document.getElementById("tipo_origen").value;
+
+    if (materialesRequisicion.length > 0 && tipoOrigen !== tipoOrigenActual) {
+        alert("No puedes mezclar ensamble y modulo en la misma requisicion. Envia o elimina primero.");
+        document.getElementById("tipo_origen").value = tipoOrigenActual;
+        return;
+    }
+
+    tipoOrigenActual = tipoOrigen;
+
+    const materialSelect = document.getElementById("material_select");
+    const material_id = materialSelect.value;
+    const nombreMaterial = materialSelect.options[materialSelect.selectedIndex]?.text || "";
+
+    const cantidad = parseInt(document.getElementById("cantidad").value, 10);
+    const tipoMovimiento = document.getElementById("tipo_movimiento").value;
+
+    if (!cantidad || cantidad <= 0) {
+        alert("Ingrese una cantidad valida");
+        return;
+    }
+
+    const existente = materialesRequisicion.find(item =>
+        item.material_id === material_id &&
+        item.tipo_movimiento === tipoMovimiento &&
+        item.item_tipo === tipoOrigen
+    );
+
+    if (existente) {
+        existente.cantidad += cantidad;
+    } else {
+        materialesRequisicion.push({
+            material_id,
+            nombre: nombreMaterial,
+            cantidad,
+            tipo_movimiento: tipoMovimiento,
+            item_tipo: tipoOrigen
+        });
+    }
+
+    renderizarTabla();
+    cargarRequisicionesEnviadas();
+    document.getElementById("cantidad").value = "";
+}
+
+
+function editarMaterial(index) {
+    const item = materialesRequisicion[index];
+    if (!item) return;
+
+    const cantidadTexto = prompt("Editar cantidad:", String(item.cantidad));
+    if (cantidadTexto === null) return;
+
+    const cantidad = parseInt(String(cantidadTexto).trim(), 10);
+    if (!cantidad || cantidad <= 0) {
+        alert("Cantidad invalida");
+        return;
+    }
+
+    const tipoTexto = prompt("Editar tipo (nuevo/cambio/retorno):", String(item.tipo_movimiento || "nuevo"));
+    if (tipoTexto === null) return;
+
+    const tipo = String(tipoTexto).trim().toLowerCase();
+    if (!["nuevo", "cambio", "retorno"].includes(tipo)) {
+        alert("Tipo invalido. Use: nuevo, cambio o retorno");
+        return;
+    }
+
+    item.cantidad = cantidad;
+    item.tipo_movimiento = tipo;
+
+    const fusion = [];
+    materialesRequisicion.forEach((m) => {
+        const existente = fusion.find(x =>
+            x.material_id === m.material_id &&
+            x.tipo_movimiento === m.tipo_movimiento &&
+            x.item_tipo === m.item_tipo
+        );
+        if (existente) {
+            existente.cantidad += Number(m.cantidad) || 0;
+        } else {
+            fusion.push({ ...m });
+        }
+    });
+    materialesRequisicion = fusion;
+
+    renderizarTabla();
+    cargarRequisicionesEnviadas();
+}
+function eliminarMaterial(index) {
+    materialesRequisicion.splice(index, 1);
+    if (materialesRequisicion.length === 0) {
+        tipoOrigenActual = document.getElementById("tipo_origen").value;
+    }
+    renderizarTabla();
+    cargarRequisicionesEnviadas();
+}
+
+async function enviarRequisicion() {
+    if (materialesRequisicion.length === 0) {
+        alert("Debe agregar al menos un material");
+        return;
+    }
+
+    const linea_id = document.getElementById("linea_select").value;
+    if (!linea_id) {
+        alert("Debe seleccionar una linea");
+        return;
+    }
+
+    const confirmar = confirm("Esta seguro que desea enviar esta requisicion?");
+    if (!confirmar) return;
+
+    const tipo_origen = document.getElementById("tipo_origen").value;
+    const turno = actualizarTurnoActualEmpleado();
+
+    const response = await fetch("http://localhost:3000/requisiciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            usuario_id,
+            linea_id,
+            tipo_origen,
+            turno,
+            materiales: materialesRequisicion
+        })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo enviar la requisicion");
+        return;
+    }
+
+    alert("Requisicion enviada correctamente");
+    materialesRequisicion = [];
+    tipoOrigenActual = document.getElementById("tipo_origen").value;
+    renderizarTabla();
+    cargarRequisicionesEnviadas();
+}
+
+function cambiarTipoOrigen() {
+    const nuevoTipo = document.getElementById("tipo_origen").value;
+
+    if (materialesRequisicion.length > 0 && nuevoTipo !== tipoOrigenActual) {
+        alert("No puedes cambiar tipo con una requisicion activa. Envia o elimina primero.");
+        document.getElementById("tipo_origen").value = tipoOrigenActual;
+        return;
+    }
+
+    tipoOrigenActual = nuevoTipo;
+    cargarMateriales();
+    cargarResumenMaterialLinea();
+    cargarRequisicionesEnviadas();
+}
+
+cargarLineas();
+cargarMateriales();
+document.getElementById("linea_select").addEventListener("change", cargarResumenMaterialLinea);
+document.getElementById("tipo_origen").addEventListener("change", cambiarTipoOrigen);
+document.getElementById("filtro_req_linea")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
+document.getElementById("filtro_req_estado")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
+document.getElementById("filtro_req_fecha_desde")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
+document.getElementById("filtro_req_fecha_hasta")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
+mostrarVistaEmpleado("material");
+cargarResumenMaterialLinea();
+actualizarTurnoActualEmpleado();
+
+setInterval(() => {
+    if (estaEditandoFormulario()) return;
+    actualizarTurnoActualEmpleado();
+    cargarLineas();
+    cargarMateriales();
+    cargarResumenMaterialLinea();
+    cargarRequisicionesEnviadas();
+}, 5000);
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

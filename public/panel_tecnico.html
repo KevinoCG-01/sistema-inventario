@@ -1,0 +1,330 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="styles.css">
+    <title>Panel Tecnico de PFA</title>
+
+    <style>
+        .iec-encabezado {
+            text-align: center;
+            margin: 0 0 10px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #134e4a;
+            letter-spacing: 0.3px;
+        }
+
+        .titulo-tecnico-pfa {
+            font-size: 2rem;
+            margin: 0;
+        }
+
+        .estado-activo {
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .activo {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .inactivo {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+<h2 class="iec-encabezado">Instrumentacion Equipo Control "IEC"</h2>
+<div class="panel-header">
+<h1 class="titulo-tecnico-pfa">Tecnico de PFA</h1>
+<div class="logout-menu">
+<button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
+<div id="logout-dropdown" class="logout-dropdown">
+<button onclick="cerrarSesion()">Cerrar sesion</button>
+</div>
+</div>
+</div>
+<h2 id="bienvenida_tecnico"></h2>
+
+<div id="estado_equipo" class="estado-activo"></div>
+
+<h2>Solicitar / Devolver Equipo</h2>
+
+<!-- Tipo de acciÃ³n -->
+<select id="tipo_select">
+    <option value="requisicion">Requisicion</option>
+</select><br><br>
+
+<select id="linea_select"></select><br><br>
+
+<select id="equipo_select"></select><br><br>
+
+<button id="btn_solicitar" onclick="procesarAccion()">Enviar</button>
+
+<hr>
+
+<h2>Mis Equipos</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Equipo</th>
+            <th>Linea</th>
+            <th>Estado</th>
+            <th>Accion</th>
+        </tr>
+    </thead>
+    <tbody id="tabla_asignaciones"></tbody>
+</table>
+
+</div>
+
+<script>
+
+function estaEditandoFormulario(){
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function toggleLogoutMenu(event){
+    if (event) event.stopPropagation();
+    const menu = document.getElementById("logout-dropdown");
+    if (!menu) return;
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function cerrarSesion(){
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".logout-menu");
+    const menu = document.getElementById("logout-dropdown");
+    if (!wrap || !menu) return;
+    if (!wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+});
+const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+if (!usuario || usuario.rol !== "tecnico") {
+    alert("Acceso no autorizado");
+    window.location.href = "login.html";
+}
+
+const bienvenidaTecnico = document.getElementById("bienvenida_tecnico");
+if (bienvenidaTecnico) {
+    const nombreTecnico = (usuario && usuario.nombre) ? usuario.nombre : "Tecnico de PFA";
+    bienvenidaTecnico.textContent = `Bienvenido ${nombreTecnico}.`;
+}
+
+/* ================= CARGAR LINEAS ================= */
+
+async function cargarLineas() {
+    const res = await fetch("http://localhost:3000/lineas");
+    const data = await res.json();
+
+    const select = document.getElementById("linea_select");
+    select.innerHTML = "";
+
+    data.forEach(l => {
+        const option = document.createElement("option");
+        option.value = l.id;
+        option.textContent = l.nombre;
+        select.appendChild(option);
+    });
+}
+
+/* ================= CARGAR EQUIPOS DISPONIBLES ================= */
+
+async function cargarEquipos() {
+    const res = await fetch("http://localhost:3000/equipos-disponibles");
+    const data = await res.json();
+
+    const select = document.getElementById("equipo_select");
+    select.innerHTML = "";
+
+    data.forEach(e => {
+        const option = document.createElement("option");
+        option.value = e.id;
+        const descripcion = (e.descripcion || "").toString().trim();
+        const bloqueDescripcion = descripcion ? ` - ${descripcion}` : "";
+        option.textContent = `${e.nombre}${bloqueDescripcion} - ${e.numero_serie}`;
+        select.appendChild(option);
+    });
+}
+
+/* ================= CARGAR ASIGNACIONES ================= */
+
+async function cargarAsignaciones() {
+
+    const res = await fetch(
+        `http://localhost:3000/asignaciones/activo/${usuario.id}`
+    );
+
+    const data = await res.json();
+
+    const tabla = document.getElementById("tabla_asignaciones");
+    const estadoDiv = document.getElementById("estado_equipo");
+    const btnSolicitar = document.getElementById("btn_solicitar");
+
+    tabla.innerHTML = "";
+
+let tieneBloqueo = false;
+
+data.forEach(a => {
+
+    if (["pendiente","aprobado","entregado","pendiente_devolucion"].includes(a.estado)) {
+        tieneBloqueo = true;
+    }
+
+    let boton = "";
+
+    if (a.estado === "entregado") {
+        boton = `<button onclick="devolver(${a.id})">Devolver</button>`;
+    }
+
+    tabla.innerHTML += `
+        <tr>
+            <td>${a.equipo || "-"}</td>
+            <td>${a.linea}</td>
+            <td>${a.estado}</td>
+            <td>${boton}</td>
+        </tr>
+    `;
+});
+
+    /* ================= ESTADOS VISUALES ================= */
+
+if (data.length === 0) {
+
+    estadoDiv.innerText = "🟢 No tienes un equipo activo";
+    estadoDiv.className = "estado-activo inactivo";
+    btnSolicitar.disabled = false;
+
+} else {
+
+    const prioridad = ["entregado", "aprobado", "pendiente_devolucion", "pendiente"];
+    let estadoActual = data[0].estado;
+
+    for (const estado of prioridad) {
+        if (data.some(a => a.estado === estado)) {
+            estadoActual = estado;
+            break;
+        }
+    }
+
+    if (estadoActual === "pendiente") {
+        estadoDiv.innerText = "🟠 Tienes una solicitud pendiente de aprobacion";
+    }
+    else if (estadoActual === "aprobado") {
+        estadoDiv.innerText = "🔵 Tu solicitud fue aprobada, ve por el equipo a instrumentacion";
+    }
+    else if (estadoActual === "entregado") {
+        estadoDiv.innerText = "🔴 Tienes un equipo activo";
+    }
+    else if (estadoActual === "pendiente_devolucion") {
+        estadoDiv.innerText = "🟠 Tu devolucion esta pendiente de aprobacion";
+    }
+
+    estadoDiv.className = "estado-activo activo";
+    btnSolicitar.disabled = tieneBloqueo;
+}
+}
+/* ================= PROCESAR ACCIÃ“N ================= */
+
+async function procesarAccion() {
+
+    const tipo = document.getElementById("tipo_select").value;
+    const equipo_id = document.getElementById("equipo_select").value;
+    const linea_id = document.getElementById("linea_select").value;
+
+    if (tipo === "requisicion") {
+
+        const response = await fetch("http://localhost:3000/asignaciones/solicitar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                usuario_id: usuario.id,
+                equipo_id,
+                linea_id
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            alert(data.error);
+            return;
+        }
+
+        alert("Solicitud enviada correctamente");
+
+    }
+
+    cargarAsignaciones();
+    cargarEquipos();
+}
+
+/* ================= DEVOLVER ================= */
+
+async function devolver(id) {
+
+    const response = await fetch(`http://localhost:3000/asignaciones/${id}/solicitar-devolucion`, {
+        method: "PUT"
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        alert(data.error || "No se pudo solicitar la devolucion");
+        return;
+    }
+
+    alert("Solicitud de devolucion enviada al administrador");
+
+    cargarAsignaciones();
+}
+
+
+/* ================= INICIO ================= */
+
+cargarLineas();
+cargarEquipos();
+cargarAsignaciones();
+
+setInterval(() => {
+    if (estaEditandoFormulario()) return;
+    cargarLineas();
+    cargarAsignaciones();
+    cargarEquipos();
+}, 5000);
+
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+

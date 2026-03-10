@@ -1,0 +1,251 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="styles.css">
+    <title>Login - Sistema Inventario</title>
+    <style>
+        .login-card {
+            margin-bottom: 18px;
+        }
+
+        .mensaje-login {
+            margin-top: 10px;
+            font-weight: 600;
+            color: #b91c1c;
+            min-height: 20px;
+        }
+
+        .horarios-login-card h3 {
+            margin: 0 0 8px;
+        }
+
+        .horarios-sub {
+            margin: 0 0 12px;
+            color: #334155;
+        }
+
+        .turnos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 12px;
+        }
+
+        .turno-box {
+            border: 1px solid #dbe3ea;
+            border-radius: 12px;
+            background: #fff;
+            padding: 12px;
+        }
+
+        .turno-box h4 {
+            margin: 0 0 4px;
+            color: #0f172a;
+        }
+
+        .turno-rango {
+            margin: 0 0 10px;
+            font-size: 14px;
+            color: #475569;
+        }
+
+        .turno-box table {
+            margin-top: 0;
+        }
+
+        .sin-horario {
+            text-align: left;
+            color: #64748b;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card login-card">
+        <h2>Iniciar Sesion</h2>
+
+        <input type="number" id="numero_id" placeholder="ID"><br><br>
+        <input type="password" id="contrasena" placeholder="Contrasena"><br><br>
+        <button onclick="login()">Ingresar</button>
+
+        <p id="mensaje" class="mensaje-login"></p>
+    </div>
+
+    <div class="card horarios-login-card">
+        <h3>Horarios por turno</h3>
+        <p class="horarios-sub">Los horarios se muestran por rol y turno</p>
+
+        <div class="turnos-grid">
+            <div class="turno-box">
+                <h4>Turno 01</h4>
+                <p class="turno-rango">06:24 AM - 04:29 PM</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Area</th>
+                            <th>Dia</th>
+                            <th>Horario</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla_turno_01">
+                        <tr><td colspan="3" class="sin-horario">Cargando horarios...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="turno-box">
+                <h4>Turno 02</h4>
+                <p class="turno-rango">04:30 PM - 01:00 AM</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Area</th>
+                            <th>Dia</th>
+                            <th>Horario</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla_turno_02">
+                        <tr><td colspan="3" class="sin-horario">Cargando horarios...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ROLES_HORARIO = ["empleado", "tecnico", "supervisor", "admin"];
+    const DIAS = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
+
+    function rolTitulo(rol) {
+        const r = String(rol || "").toLowerCase();
+        if (r === "supervisor") return "Tecnico de Instrumentacion";
+        if (r === "tecnico") return "Tecnico de PFA";
+        if (r === "empleado") return "Supervisor de PFA";
+        if (r === "admin") return "Admin";
+        return String(rol || "").charAt(0).toUpperCase() + String(rol || "").slice(1);
+    }
+
+    function toMin(hhmm) {
+        const match = String(hhmm || "").match(/^(\d{2}):(\d{2})$/);
+        if (!match) return -1;
+        return Number(match[1]) * 60 + Number(match[2]);
+    }
+
+    function turnoPorHoraInicio(horaInicio) {
+        const min = toMin(horaInicio);
+        if (min < 0) return null;
+
+        const inicioTurno1 = 6 * 60 + 24;   // 06:24
+        const finTurno1 = 16 * 60 + 29;     // 16:29
+        const inicioTurno2 = 16 * 60 + 30;  // 16:30
+        const finTurno2 = 1 * 60;           // 01:00
+
+        if (min >= inicioTurno1 && min <= finTurno1) return "turno_01";
+        if (min >= inicioTurno2 || min <= finTurno2) return "turno_02";
+        return null;
+    }
+
+    function pintarTablaTurno(idTabla, filas) {
+        const tbody = document.getElementById(idTabla);
+        if (!tbody) return;
+
+        if (!filas.length) {
+            tbody.innerHTML = `<tr><td colspan="3" class="sin-horario">Sin horarios activos en este turno.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = filas.map(f => `
+            <tr>
+                <td>${f.rol}</td>
+                <td>${f.dia}</td>
+                <td>${f.hora_inicio} - ${f.hora_fin}</td>
+            </tr>
+        `).join("");
+    }
+
+    async function cargarHorariosPorTurno() {
+        try {
+            const respuestas = await Promise.all(
+                ROLES_HORARIO.map(rol =>
+                    fetch(`http://localhost:3000/horarios-login?rol=${rol}`)
+                        .then(r => r.ok ? r.json() : [])
+                        .catch(() => [])
+                )
+            );
+
+            const turno01 = [];
+            const turno02 = [];
+
+            respuestas.forEach((lista, idx) => {
+                const rol = rolTitulo(ROLES_HORARIO[idx]);
+                (Array.isArray(lista) ? lista : []).forEach(h => {
+                    if (!h || h.activo === false) return;
+                    const dia = DIAS[Number(h.dia_semana)] || String(h.dia_semana ?? "-");
+                    const fila = {
+                        rol,
+                        dia,
+                        hora_inicio: h.hora_inicio || "--:--",
+                        hora_fin: h.hora_fin || "--:--"
+                    };
+
+                    const turno = turnoPorHoraInicio(fila.hora_inicio);
+                    if (turno === "turno_01") turno01.push(fila);
+                    if (turno === "turno_02") turno02.push(fila);
+                });
+            });
+
+            turno01.sort((a, b) => (a.rol + a.dia + a.hora_inicio).localeCompare(b.rol + b.dia + b.hora_inicio));
+            turno02.sort((a, b) => (a.rol + a.dia + a.hora_inicio).localeCompare(b.rol + b.dia + b.hora_inicio));
+
+            pintarTablaTurno("tabla_turno_01", turno01);
+            pintarTablaTurno("tabla_turno_02", turno02);
+        } catch (error) {
+            pintarTablaTurno("tabla_turno_01", []);
+            pintarTablaTurno("tabla_turno_02", []);
+        }
+    }
+
+    async function login() {
+        const numero_id = document.getElementById("numero_id").value;
+        const contrasena = document.getElementById("contrasena").value;
+        const msg = document.getElementById("mensaje");
+        msg.innerText = "";
+
+        try {
+            const response = await fetch("http://localhost:3000/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ numero_id, contrasena })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                localStorage.setItem("usuario", JSON.stringify(data.usuario));
+
+                if (data.usuario.rol === "admin") {
+                    window.location.href = "panel_admin.html";
+                } else if (data.usuario.rol === "supervisor") {
+                    window.location.href = "panel_supervisor.html";
+                } else if (data.usuario.rol === "empleado") {
+                    window.location.href = "panel_empleado.html";
+                } else if (data.usuario.rol === "tecnico") {
+                    window.location.href = "panel_tecnico.html";
+                }
+            } else {
+                msg.innerText = data.message || "Credenciales incorrectas";
+            }
+        } catch (error) {
+            msg.innerText = "No se pudo conectar con el servidor";
+        }
+    }
+
+    cargarHorariosPorTurno();
+    setInterval(cargarHorariosPorTurno, 60000);
+</script>
+
+</body>
+</html>

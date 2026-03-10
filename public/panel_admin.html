@@ -1,0 +1,1856 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="styles.css">
+<title>Panel Administrador</title>
+
+<style>
+:root {
+    --brand-1: #0f766e;
+    --brand-2: #0ea5a6;
+    --brand-3: #134e4a;
+    --surface: #ffffff;
+    --surface-soft: #f8fafc;
+    --line: #dbe3ea;
+    --text: #0f172a;
+}
+
+body {
+    margin: 0;
+    padding: 24px;
+    color: var(--text);
+    background:
+        radial-gradient(900px 400px at 10% -10%, rgba(20, 184, 166, 0.25), transparent 60%),
+        radial-gradient(1000px 500px at 95% 0%, rgba(14, 165, 166, 0.2), transparent 60%),
+        linear-gradient(135deg, #eaf6f6 0%, #f4f7fb 45%, #eef7f9 100%);
+}
+
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 12px 32px rgba(2, 8, 23, 0.08);
+}
+
+h1 {
+    margin: 0 0 18px;
+    color: var(--brand-3);
+    letter-spacing: 0.2px;
+}
+
+.seccion {
+    display: none;
+    margin-top: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.activo { display: block; }
+
+.menu-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.menu-botones button {
+    margin-right: 0;
+}
+
+button {
+    border: none;
+    border-radius: 10px;
+    padding: 9px 14px;
+    background: linear-gradient(135deg, var(--brand-2), #0284c7);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform .08s ease, filter .2s ease;
+}
+
+button:hover {
+    filter: brightness(1.05);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+input, select, textarea {
+    border-radius: 10px;
+    border: 1px solid #cfd8e3;
+    background: #fff;
+}
+
+table {
+    width: 100%;
+    margin-top: 10px;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+th, td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #e7edf4;
+}
+
+thead th {
+    background: #f2f7fb;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+tbody tr:hover {
+    background: #f8fbff;
+}
+
+.tabla-scroll-equipos { overflow-x: auto; }
+#tabla_equipos td, #tabla_equipos th { vertical-align: middle; }
+#tabla_equipos th:nth-child(7), #tabla_equipos td:nth-child(7) { min-width: 260px; }
+#tabla_equipos td.col-equipo, #tabla_equipos td.col-serie, #tabla_equipos td.col-ubicacion { word-break: break-word; }
+.acciones-linea { display: grid; grid-template-columns: repeat(2, minmax(100px, 1fr)); gap: 6px; }
+.acciones-linea button { width: 100%; margin: 0; padding: 7px 8px; white-space: nowrap; }
+
+.alerta {
+    background-color: #ffe5e5;
+    color: #c62828;
+    font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="panel-header">
+<h1>Panel Administrador</h1>
+<div class="logout-menu">
+<button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
+<div id="logout-dropdown" class="logout-dropdown">
+<button onclick="cerrarSesion()">Cerrar sesion</button>
+</div>
+</div>
+</div>
+<h2 id="bienvenida_admin"></h2>
+
+<div class="menu-botones">
+<button onclick="mostrarSeccion('lineas')">Lineas</button>
+<button onclick="mostrarSeccion('materiales')">Materiales Ensamble</button>
+<button onclick="mostrarSeccion('herramienta_modulo')">Herramienta de modulo</button>
+<button onclick="mostrarSeccion('equipos')">Equipos</button>
+<button onclick="mostrarSeccion('solicitudes')">Solicitudes</button>
+<button onclick="mostrarSeccion('material_lineas')">Material por Linea</button>
+<button onclick="abrirUsuarios()">Usuarios</button>
+<button onclick="mostrarSeccion('horarios')">Control Horarios</button>
+<button onclick="mostrarSeccion('exportar')">Exportar</button>
+</div>
+
+<!-- ================= LINEAS ================= -->
+<div id="lineas" class="seccion activo">
+
+<h2>Administracion de lineas de PFA</h2>
+
+<input type="text" id="nombre_linea" placeholder="Nombre de la linea">
+<button onclick="agregarLinea()">Agregar</button>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Nombre</th>
+<th>Accion</th>
+</tr>
+</thead>
+
+<tbody id="tabla_lineas"></tbody>
+</table>
+
+</div>
+
+<!-- ================= MATERIALES ================= -->
+<div id="materiales" class="seccion">
+
+<h2>Gestion de Materiales</h2>
+
+<input type="text" id="nombre_material" placeholder="Nombre"><br><br>
+<select id="tipo_material">
+    <option value="consumible">Consumible</option>
+    <option value="herramienta">Herramienta</option>
+</select><br><br>
+
+<input type="number" id="cantidad_stock" placeholder="Cantidad en Stock"><br><br>
+<input type="number" id="stock_minimo" placeholder="Stock Ma­nimo"><br><br>
+<input type="number" id="precio_unitario" step="0.01" min="0" placeholder="Precio unitario"><br><br>
+
+<button onclick="agregarMaterial()">Agregar Material</button>
+
+<hr>
+
+<!-- ðŸ”Ž BUSCADOR -->
+<input type="text" 
+id="buscar_material"
+placeholder="Buscar material por nombre"
+onkeyup="buscarMaterial()"
+style="margin-bottom:15px; padding:8px; width:300px;">
+
+<table>
+<thead>
+<tr>
+<th>Nombre</th>
+<th>Stock</th>
+<th>Precio Unitario</th>
+<th>Total</th>
+<th>Agregar</th>
+<th>Acciones</th>
+</tr>
+</thead>
+<tbody id="tabla_materiales"></tbody>
+</table>
+
+</div>
+
+<!-- ================= HERRAMIENTA MODULO ================= -->
+<div id="herramienta_modulo" class="seccion">
+<h2>Gestion de Herramienta de Modulo</h2>
+<input type="text" id="nombre_herramienta_modulo" placeholder="Nombre"><br><br>
+<input type="text" id="descripcion_herramienta_modulo" placeholder="Descripcion"><br><br>
+<input type="number" id="cantidad_herramienta_modulo" placeholder="Cantidad"><br><br>
+<input type="number" id="stock_minimo_herramienta_modulo" placeholder="Stock minimo"><br><br>
+<input type="number" id="precio_herramienta_modulo" step="0.01" placeholder="Precio por unidad"><br><br>
+<button onclick="agregarHerramientaModulo()">Agregar Herramienta</button>
+<hr>
+<input type="text"
+id="buscar_herramienta_modulo"
+placeholder="Buscar herramienta por nombre"
+onkeyup="buscarHerramientaModulo()"
+style="margin-bottom:15px; padding:8px; width:300px;">
+<table>
+<thead>
+<tr>
+<th>Nombre</th>
+<th>Descripcion</th>
+<th>Stock</th>
+<th>Precio Unitario</th>
+<th>Total</th>
+<th>Agregar</th>
+<th>Acciones</th>
+</tr>
+</thead>
+<tbody id="tabla_herramienta_modulo"></tbody>
+</table>
+</div>
+
+<!-- ================= EQUIPOS ================= -->
+<div id="equipos" class="seccion">
+
+<h2>Gestion de Equipos Individuales</h2>
+
+<input type="text" id="nombre_equipo" placeholder="Nombre del equipo"><br><br>
+
+<input type="text" id="descripcion_equipo" placeholder="Descripcion"><br><br>
+
+<input type="text" id="numero_serie" placeholder="Numero de Serie"><br><br>
+
+<input type="text" id="numero_activo" placeholder="Fix Asset/Low Value"><br><br>
+
+<select id="ubicacion_equipo"></select>
+<br><br>
+
+<button onclick="agregarEquipoIndividual()">Agregar Equipo</button>
+
+<hr>
+
+<input type="text" id="buscar_equipo"
+placeholder="Buscar por Serie o Nombre"
+onkeyup="filtrarEquipos()"
+style="margin-bottom:15px; padding:8px; width:300px;">
+
+<div class="tabla-scroll-equipos">
+<table>
+<thead>
+<tr>
+<th>Equipo</th>
+<th>Descripcion</th>
+<th>Serie</th>
+<th>Fix Asset/Low Value</th>
+<th>Ubicacion</th>
+<th>Condicion</th>
+<th>Acciones</th>
+</tr>
+</thead>
+<tbody id="tabla_equipos"></tbody>
+</table>
+</div>
+
+</div>
+
+<!-- ================= SOLICITUDES ================= -->
+<div id="solicitudes" class="seccion">
+
+<h2>Solicitudes Pendientes</h2>
+
+<table>
+<thead>
+<tr>
+<th>Tecnico de PFA</th>
+<th>Equipo</th>
+<th>Li­nea</th>
+<th>Fecha</th>
+<th>Accion</th>
+</tr>
+</thead>
+<tbody id="tabla_solicitudes"></tbody>
+</table>
+
+</div>
+
+
+<!-- ================= MATERIAL POR LINEA ================= -->
+<div id="material_lineas" class="seccion">
+
+<h2>Material Actualmente en Lineas</h2>
+
+<select id="filtro_linea_material" style="max-width:300px; margin-right:10px;">
+    <option value="todas">Todas las lineas</option>
+</select>
+
+<select id="filtro_seccion_material" style="max-width:250px; margin-right:10px;">
+    <option value="todas">Todas las secciones</option>
+    <option value="ensamble">Ensamble</option>
+    <option value="modulo">Herramienta de modulo</option>
+</select>
+
+<button onclick="cargarMaterialPorLinea()">Filtrar</button>
+<button onclick="exportarMaterialPorLinea()">Exportar</button>
+
+<table>
+<thead>
+<tr>
+<th>Linea</th>
+<th>Seccion</th>
+<th>Material</th>
+<th>Acumulado (Nuevo)</th>
+<th>Cantidad en Cambio</th>
+</tr>
+</thead>
+<tbody id="tabla_material_lineas"></tbody>
+</table>
+
+</div>
+
+<!-- ================= USUARIOS ================= -->
+<div id="usuarios" class="seccion">
+
+    <h2>Agregar Usuario</h2>
+
+    <div style="display:flex; flex-direction:column; max-width:400px; gap:10px;">
+        
+        <label>Nombre de Usuario:</label>
+        <input type="text" id="nombre_usuario" placeholder="Nombre completo">
+        <label>Numero de Usuario (ID):</label>
+        <input type="text" id="numero_id_usuario" placeholder="Ej: 12345">
+
+        <label>Tecnico de PFA / Supervisor de PFA / Tecnico de Instrumentacion:</label>
+        <select id="rol_usuario">
+            <option value="tecnico">Tecnico de PFA</option>
+            <option value="empleado">Supervisor de PFA</option>
+            <option value="supervisor">Tecnico de Instrumentacion</option>
+        </select>
+
+        <label>Contraseña:</label>
+        <input type="password" id="password_usuario" placeholder="Ingresar contraseña">
+
+        <label>Confirmar contraseña:</label>
+        <input type="password" id="confirmar_password" placeholder="Repetir contraseña">
+
+        <button onclick="crearUsuario()">Agregar Usuario</button>
+    </div>
+
+    <hr style="margin:30px 0;">
+
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:15px;">
+        <input 
+        type="text"
+        id="buscar_usuario"
+        placeholder="Buscar por nombre o ID"
+        onkeyup="buscarUsuarios()"
+        style="padding:8px; width:300px;">
+
+        <select id="filtro_rol_usuario" onchange="buscarUsuarios()" style="padding:8px; width:220px;">
+            <option value="todos">Todos los roles</option>
+            <option value="tecnico">Tecnico de PFA</option>
+            <option value="empleado">Supervisor de PFA</option>
+            <option value="supervisor">Tecnico de Instrumentacion</option>
+        </select>
+    </div>
+
+    <h2>Tabla de Supervisor de PFA, Tecnicos de PFA y Tecnico de Instrumentacion</h2>
+
+    <table border="1" cellpadding="8" style="width:100%; max-width:1200px;">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Usuario (ID)</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Contrasena</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="tabla-usuarios">
+        </tbody>
+    </table>
+
+</div>
+
+
+<!-- ================= HORARIOS LOGIN ================= -->
+<div id="horarios" class="seccion">
+
+<h2>Control de horarios de inicio de sesion</h2>
+<p style="margin:8px 0 16px; opacity:.85;">Define hasta 24 rangos por rol para permitir acceso.</p>
+
+<div style="display:grid; grid-template-columns:repeat(4,minmax(160px,1fr)); gap:10px; max-width:900px; margin-bottom:12px;">
+    <select id="horario_rol" onchange="cargarHorariosLogin()">
+        <option value="empleado">Supervisor de PFA</option>
+        <option value="tecnico">Tecnico de PFA</option>
+        <option value="supervisor">Tecnico de Instrumentacion</option>
+        <option value="admin">Admin</option>
+    </select>
+
+    <select id="horario_dia">
+        <option value="1">Lunes</option>
+        <option value="2">Martes</option>
+        <option value="3">Miercoles</option>
+        <option value="4">Jueves</option>
+        <option value="5">Viernes</option>
+        <option value="6">Sabado</option>
+        <option value="0">Domingo</option>
+    </select>
+
+    <input type="time" id="horario_inicio">
+    <input type="time" id="horario_fin">
+</div>
+
+<button onclick="agregarHorarioLogin()">Agregar horario</button>
+
+<table>
+    <thead>
+        <tr>
+            <th>Rol</th>
+            <th>Dia</th>
+            <th>Inicio</th>
+            <th>Fin</th>
+            <th>Estado</th>
+            <th>Accion</th>
+        </tr>
+    </thead>
+    <tbody id="tabla_horarios_login"></tbody>
+</table>
+
+</div>
+<!-- ================= EXPORTAR ================= -->
+<div id="exportar" class="seccion">
+
+<h2>Inventario y Historial de requisiciones</h2>
+
+<button onclick="exportarInventario()">Exportar inventario de material consumible a Excel</button>
+<br><br>
+<button onclick="exportarInventarioHerramientaModulo()">Exportar inventario de herramienta de modulo a Excel</button>
+
+<div style="display:grid; gap:14px; max-width:760px; margin-top:18px;">
+    <div class="card" style="padding:14px;">
+        <h3 style="margin:0 0 10px 0;">Requisiciones Herramienta de Ensamble</h3>
+
+        <label>Desde:</label>
+        <input type="date" id="fecha_inicio_ensamble">
+
+        <label>Hasta:</label>
+        <input type="date" id="fecha_fin_ensamble">
+
+        <button style="margin-top:10px;" onclick="exportarRequisiciones()">Exportar a Excel</button>
+    </div>
+
+    <div class="card" style="padding:14px;">
+        <h3 style="margin:0 0 10px 0;">Requisiciones Herramienta de Modulo</h3>
+
+        <label>Desde:</label>
+        <input type="date" id="fecha_inicio_modulo">
+
+        <label>Hasta:</label>
+        <input type="date" id="fecha_fin_modulo">
+
+        <button style="margin-top:10px;" onclick="exportarRequisicionesModulo()">Exportar a Excel</button>
+    </div>
+</div>
+
+</div>
+
+<script>
+
+function estaEditandoFormulario(){
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function mostrarSeccion(id){
+document.querySelectorAll(".seccion").forEach(s=>s.classList.remove("activo"));
+document.getElementById(id).classList.add("activo");
+
+if (id === "lineas") {
+    cargarLineas();
+} else if (id === "materiales") {
+    const texto = document.getElementById("buscar_material")?.value?.trim() || "";
+    cargarMateriales(texto);
+} else if (id === "herramienta_modulo") {
+    const texto = document.getElementById("buscar_herramienta_modulo")?.value?.trim() || "";
+    cargarHerramientasModulo(texto);
+} else if (id === "equipos") {
+    cargarEquiposAdmin();
+} else if (id === "solicitudes") {
+    cargarSolicitudes();
+} else if (id === "material_lineas") {
+    cargarMaterialPorLinea();
+} else if (id === "usuarios") {
+    cargarUsuarios();
+} else if (id === "horarios") {
+    cargarHorariosLogin();
+}
+}
+
+function obtenerSeccionActivaAdmin(){
+const activa = document.querySelector(".seccion.activo");
+return activa ? activa.id : "";
+}
+
+function refrescarSeccionActivaAdmin(){
+const activa = obtenerSeccionActivaAdmin();
+
+if (activa === "lineas") {
+    cargarLineas();
+} else if (activa === "materiales") {
+    const texto = document.getElementById("buscar_material")?.value?.trim() || "";
+    cargarMateriales(texto);
+} else if (activa === "herramienta_modulo") {
+    const texto = document.getElementById("buscar_herramienta_modulo")?.value?.trim() || "";
+    cargarHerramientasModulo(texto);
+} else if (activa === "equipos") {
+    cargarEquiposAdmin();
+} else if (activa === "solicitudes") {
+    cargarSolicitudes();
+} else if (activa === "material_lineas") {
+    cargarMaterialPorLinea();
+} else if (activa === "usuarios") {
+    cargarUsuarios();
+} else if (activa === "horarios") {
+    cargarHorariosLogin();
+}
+}
+
+/* ================= LINEAS ================= */
+
+async function cargarLineas(){
+try{
+    const res = await fetch("http://localhost:3000/lineas");
+
+    if(!res.ok){
+        if(res.status === 401 || res.status === 403){
+            alert("SesiÃ³n expirada o sin permisos. Inicia sesiÃ³n de nuevo.");
+            window.location.href = "login.html";
+            return;
+        }
+        throw new Error("Error al cargar lÃ­neas");
+    }
+
+    const data = await res.json();
+    if(!Array.isArray(data)) throw new Error("Respuesta invÃ¡lida de /lineas");
+
+    const tabla = document.getElementById("tabla_lineas");
+    tabla.innerHTML = "";
+
+    const select = document.getElementById("linea_select");
+    if(select) select.innerHTML = "";
+
+    const ubicacionSelect = document.getElementById("ubicacion_equipo");
+    if(ubicacionSelect) ubicacionSelect.innerHTML = "";
+
+    const filtroLineaMaterial = document.getElementById("filtro_linea_material");
+    if(filtroLineaMaterial){
+        filtroLineaMaterial.innerHTML = `<option value="todas">Todas las lineas</option>`;
+    }
+
+    data.forEach(l=>{
+        const nombreSeguro = String(l.nombre ?? "").replace(/'/g, "\\'");
+        tabla.innerHTML += `
+        <tr>
+            <td>${l.id}</td>
+            <td>${l.nombre}</td>
+            <td>
+                <button onclick="editarLinea(${l.id}, '${nombreSeguro}')">Editar</button>
+                <button onclick="eliminarLinea(${l.id})">Eliminar</button>
+            </td>
+        </tr>`;
+
+        if(select){
+            select.innerHTML += `<option value="${l.id}">${l.nombre}</option>`;
+        }
+
+        if(ubicacionSelect){
+            ubicacionSelect.innerHTML += `<option value="${l.nombre}">${l.nombre}</option>`;
+        }
+
+        if(filtroLineaMaterial){
+            filtroLineaMaterial.innerHTML += `<option value="${l.nombre}">${l.nombre}</option>`;
+        }
+    });
+}catch(err){
+    console.error("Error en cargarLineas:", err);
+}
+}
+
+
+async function agregarLinea(){
+const nombre=document.getElementById("nombre_linea").value;
+
+await fetch("http://localhost:3000/lineas",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({nombre})
+});
+
+cargarLineas();
+}
+
+async function eliminarLinea(id){
+if(!confirm("Â¿Eliminar lÃ­nea?")) return;
+await fetch(`http://localhost:3000/lineas/${id}`,{method:"DELETE"});
+cargarLineas();
+}
+
+async function editarLinea(id, nombreActual){
+const nuevoNombre = prompt("Editar nombre de la lÃ­nea:", nombreActual);
+if(nuevoNombre === null) return;
+
+const nombre = nuevoNombre.trim();
+if(!nombre){
+alert("El nombre no puede estar vacÃ­o");
+return;
+}
+
+const res = await fetch(`http://localhost:3000/lineas/${id}`,{
+method:"PUT",
+headers:{ "Content-Type":"application/json" },
+body: JSON.stringify({ nombre })
+});
+
+if(!res.ok){
+const data = await res.json().catch(() => ({}));
+alert(data.error || "Error al editar lÃ­nea");
+return;
+}
+
+cargarLineas();
+}
+
+
+//* ================= MATERIALES ================= */
+
+async function cargarMateriales(busqueda = ""){
+
+const url = busqueda 
+? `http://localhost:3000/materiales?buscar=${busqueda}`
+: "http://localhost:3000/materiales";
+
+const res = await fetch(url);
+const data = await res.json();
+
+const tabla = document.getElementById("tabla_materiales");
+tabla.innerHTML = "";
+
+data.forEach(m => {
+
+let clase = m.cantidad_stock <= m.stock_minimo ? "alerta" : "";
+const nombreSeguro = String(m.nombre ?? "").replace(/'/g, "\\'");
+const tipoSeguro = String(m.tipo ?? "").replace(/'/g, "\\'");
+const precioUnitario = Number(m.precio_unitario || 0);
+const totalInventario = Number(m.cantidad_stock || 0) * precioUnitario;
+
+tabla.innerHTML += `
+<tr class="${clase}">
+<td>${m.nombre}</td>
+<td>
+${m.cantidad_stock}
+<br><small>Minimo: ${m.stock_minimo}</small>
+</td>
+<td>$${precioUnitario.toFixed(2)}</td>
+<td>$${totalInventario.toFixed(2)}</td>
+<td>
+<input type="number" id="sumar_${m.id}" min="1" style="width:80px;">
+<button onclick="sumarStock(${m.id})">+</button>
+</td>
+<td>
+    <div class="acciones-linea">
+        <button onclick="editarMaterial(${m.id}, '${nombreSeguro}', '${tipoSeguro}', ${m.stock_minimo}, ${precioUnitario}, ${Number(m.cantidad_stock || 0)})">Editar</button>
+        <button onclick="eliminarMaterial(${m.id})">Eliminar</button>
+    </div>
+</td>
+</tr>`;
+});
+}
+
+async function buscarMaterial(){
+const texto = document.getElementById("buscar_material").value.trim();
+cargarMateriales(texto);
+}
+
+async function sumarStock(id){
+const cantidad = document.getElementById("sumar_"+id).value;
+if(!cantidad || cantidad<=0){ alert("Cantidad invalida"); return; }
+
+await fetch(`http://localhost:3000/materiales/${id}/stock`,{
+method:"PUT",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({ nuevo_stock: "+"+cantidad })
+});
+
+cargarMateriales();
+}
+
+async function agregarMaterial(){
+
+const material={
+nombre:document.getElementById("nombre_material").value.trim(),
+cantidad_stock:parseInt(document.getElementById("cantidad_stock").value),
+tipo: document.getElementById("tipo_material").value,
+stock_minimo:parseInt(document.getElementById("stock_minimo").value),
+precio_unitario:parseFloat(document.getElementById("precio_unitario").value)
+};
+
+if(!material.nombre){
+alert("El nombre es obligatorio");
+return;
+}
+if(Number.isNaN(material.precio_unitario) || material.precio_unitario < 0){
+alert("Precio unitario invalido");
+return;
+}
+
+const response=await fetch("http://localhost:3000/materiales",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify(material)
+});
+
+if(!response.ok){
+const data=await response.json();
+alert(data.error);
+return;
+}
+
+document.getElementById("nombre_material").value="";
+document.getElementById("cantidad_stock").value="";
+document.getElementById("stock_minimo").value="";
+document.getElementById("precio_unitario").value="";
+
+cargarMateriales();
+}
+
+async function eliminarMaterial(id){
+if(!confirm("Â¿Eliminar material?")) return;
+await fetch(`http://localhost:3000/materiales/${id}`,{method:"DELETE"});
+cargarMateriales();
+}
+
+async function editarMaterial(id, nombreActual, tipoActual, stockMinimoActual, precioActual, cantidadStockActual){
+const nombreNuevo = prompt("Editar nombre del material:", nombreActual);
+if(nombreNuevo === null) return;
+
+const nombre = nombreNuevo.trim();
+if(!nombre){
+alert("El nombre no puede estar vacio");
+return;
+}
+
+const tipoNuevo = prompt("Editar tipo (consumible/herramienta):", tipoActual);
+if(tipoNuevo === null) return;
+
+const tipo = tipoNuevo.trim().toLowerCase();
+if(tipo !== "consumible" && tipo !== "herramienta"){
+alert("Tipo invalido");
+return;
+}
+
+const stockNuevoTxt = prompt("Editar stock actual:", Number(cantidadStockActual || 0));
+if(stockNuevoTxt === null) return;
+
+const cantidad_stock = parseInt(stockNuevoTxt, 10);
+if(Number.isNaN(cantidad_stock) || cantidad_stock < 0){
+alert("Stock actual invalido");
+return;
+}
+
+const stockMinNuevo = prompt("Editar stock minimo:", stockMinimoActual);
+if(stockMinNuevo === null) return;
+
+const stock_minimo = parseInt(stockMinNuevo, 10);
+if(Number.isNaN(stock_minimo) || stock_minimo < 0){
+alert("Stock minimo invalido");
+return;
+}
+
+const precioNuevoTxt = prompt("Editar precio unitario:", Number(precioActual || 0).toFixed(2));
+if(precioNuevoTxt === null) return;
+
+const precio_unitario = parseFloat(precioNuevoTxt);
+if(Number.isNaN(precio_unitario) || precio_unitario < 0){
+alert("Precio unitario invalido");
+return;
+}
+
+const response = await fetch(`http://localhost:3000/materiales/${id}`,{
+method:"PUT",
+headers:{ "Content-Type":"application/json"},
+body:JSON.stringify({ nombre, tipo, stock_minimo, precio_unitario, cantidad_stock })
+});
+
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "Error al editar material");
+return;
+}
+
+cargarMateriales();
+}
+
+/* ================= HERRAMIENTA MODULO ================= */
+
+async function cargarHerramientasModulo(busqueda = ""){
+const url = busqueda
+? `http://localhost:3000/herramienta-modulo?buscar=${busqueda}`
+: "http://localhost:3000/herramienta-modulo";
+
+const res = await fetch(url);
+const data = await res.json();
+
+const tabla = document.getElementById("tabla_herramienta_modulo");
+tabla.innerHTML = "";
+
+data.forEach(h => {
+const nombreSeguro = String(h.nombre ?? "").replace(/'/g, "\\'");
+const descripcionSegura = String(h.descripcion ?? "").replace(/'/g, "\\'");
+const stockMinimo = Number(h.stock_minimo || 0);
+const precioUnidad = Number(h.precio_por_unidad || 0);
+const totalHerramienta = Number(h.cantidad || 0) * precioUnidad;
+const clase = Number(h.cantidad || 0) <= stockMinimo ? "alerta" : "";
+
+tabla.innerHTML += `
+<tr class="${clase}">
+<td>${h.nombre}</td>
+<td>${h.descripcion || "-"}</td>
+<td>
+${h.cantidad}
+<br><small>Minimo: ${stockMinimo}</small>
+</td>
+<td>$${precioUnidad.toFixed(2)}</td>
+<td>$${totalHerramienta.toFixed(2)}</td>
+<td>
+<input type="number" id="sumar_hm_${h.id}" min="1" style="width:80px;">
+<button onclick="sumarCantidadHerramientaModulo(${h.id})">+</button>
+</td>
+<td>
+    <div class="acciones-linea">
+        <button onclick="editarHerramientaModulo(${h.id}, '${nombreSeguro}', '${descripcionSegura}', ${h.cantidad}, ${stockMinimo}, ${precioUnidad})">Editar</button>
+        <button onclick="eliminarHerramientaModulo(${h.id})">Eliminar</button>
+    </div>
+</td>
+</tr>`;
+});
+}
+
+function buscarHerramientaModulo(){
+const texto = document.getElementById("buscar_herramienta_modulo").value.trim();
+cargarHerramientasModulo(texto);
+}
+
+async function agregarHerramientaModulo(){
+const nombre = document.getElementById("nombre_herramienta_modulo").value.trim();
+const descripcion = document.getElementById("descripcion_herramienta_modulo").value.trim();
+const cantidad = parseInt(document.getElementById("cantidad_herramienta_modulo").value, 10);
+const stock_minimo = parseInt(document.getElementById("stock_minimo_herramienta_modulo").value, 10);
+const precio_por_unidad = parseFloat(document.getElementById("precio_herramienta_modulo").value);
+
+if(!nombre){
+alert("El nombre es obligatorio");
+return;
+}
+if(Number.isNaN(cantidad) || cantidad < 0){
+alert("Cantidad invalida");
+return;
+}
+if(Number.isNaN(stock_minimo) || stock_minimo < 0){
+alert("Stock minimo invalido");
+return;
+}
+if(Number.isNaN(precio_por_unidad) || precio_por_unidad < 0){
+alert("Precio invalido");
+return;
+}
+
+const response = await fetch("http://localhost:3000/herramienta-modulo", {
+method:"POST",
+headers:{ "Content-Type":"application/json" },
+body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
+});
+
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "Error al agregar herramienta");
+return;
+}
+
+document.getElementById("nombre_herramienta_modulo").value = "";
+document.getElementById("descripcion_herramienta_modulo").value = "";
+document.getElementById("cantidad_herramienta_modulo").value = "";
+document.getElementById("stock_minimo_herramienta_modulo").value = "";
+document.getElementById("precio_herramienta_modulo").value = "";
+
+cargarHerramientasModulo();
+}
+
+async function sumarCantidadHerramientaModulo(id){
+const cantidad = document.getElementById("sumar_hm_" + id).value;
+if(!cantidad || parseInt(cantidad, 10) <= 0){
+alert("Cantidad invalida");
+return;
+}
+
+const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}/cantidad`, {
+method:"PUT",
+headers:{ "Content-Type":"application/json" },
+body: JSON.stringify({ cambio: "+" + cantidad })
+});
+
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "No se pudo actualizar cantidad");
+return;
+}
+
+cargarHerramientasModulo();
+}
+
+async function editarHerramientaModulo(id, nombreActual, descripcionActual, cantidadActual, stockMinimoActual, precioActual){
+const nombreNuevo = prompt("Editar nombre:", nombreActual);
+if(nombreNuevo === null) return;
+const nombre = nombreNuevo.trim();
+if(!nombre){
+alert("Nombre obligatorio");
+return;
+}
+
+const descripcionNueva = prompt("Editar descripcion:", descripcionActual || "");
+if(descripcionNueva === null) return;
+const descripcion = descripcionNueva.trim();
+
+const cantidadNueva = prompt("Editar cantidad:", String(cantidadActual ?? 0));
+if(cantidadNueva === null) return;
+const cantidad = parseInt(cantidadNueva, 10);
+if(Number.isNaN(cantidad) || cantidad < 0){
+alert("Cantidad invalida");
+return;
+}
+
+const stockMinimoNuevo = prompt("Editar stock minimo:", String(stockMinimoActual ?? 0));
+if(stockMinimoNuevo === null) return;
+const stock_minimo = parseInt(stockMinimoNuevo, 10);
+if(Number.isNaN(stock_minimo) || stock_minimo < 0){
+alert("Stock minimo invalido");
+return;
+}
+
+const precioNuevo = prompt("Editar precio por unidad:", String(precioActual ?? 0));
+if(precioNuevo === null) return;
+const precio_por_unidad = parseFloat(precioNuevo);
+if(Number.isNaN(precio_por_unidad) || precio_por_unidad < 0){
+alert("Precio invalido");
+return;
+}
+
+const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}`, {
+method:"PUT",
+headers:{ "Content-Type":"application/json" },
+body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
+});
+
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "Error al editar herramienta");
+return;
+}
+
+cargarHerramientasModulo();
+}
+
+async function eliminarHerramientaModulo(id){
+if(!confirm("Eliminar herramienta de modulo?")) return;
+const response = await fetch(`http://localhost:3000/herramienta-modulo/${id}`, { method:"DELETE" });
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "No se pudo eliminar");
+return;
+}
+cargarHerramientasModulo();
+}
+
+/* ================= EQUIPOS ================= */
+
+function formatearEstadoEquipo(estado){
+if (estado === "danado") return "Danado";
+if (estado === "en_uso") return "En uso";
+return "Funcional";
+}
+
+async function actualizarCondicionEquipo(id, condicion){
+const response = await fetch(`http://localhost:3000/equipos-individuales/${id}/condicion`, {
+method:"PUT",
+headers:{ "Content-Type":"application/json"},
+body: JSON.stringify({ condicion })
+});
+
+const data = await response.json().catch(() => ({}));
+if(!response.ok){
+alert(data.error || "No se pudo actualizar la condicion");
+return;
+}
+
+cargarEquiposAdmin();
+}
+
+
+
+async function devolverManualEquipo(id){
+if(!confirm("Confirmar devolucion manual de este equipo?")) return;
+
+const response = await fetch(`http://localhost:3000/equipos-individuales/${id}/devolver-manual`, {
+method:"PUT"
+});
+
+const data = await response.json().catch(() => ({}));
+if(!response.ok){
+alert(data.error || "No se pudo devolver manualmente");
+return;
+}
+
+alert("Equipo recibido correctamente");
+cargarEquiposAdmin();
+cargarSolicitudes();
+cargarMaterialPorLinea();
+}
+async function cargarEquiposAdmin(){
+const res=await fetch("http://localhost:3000/equipos-individuales");
+const data=await res.json();
+
+const tabla=document.getElementById("tabla_equipos");
+tabla.innerHTML="";
+
+data.forEach(e=>{
+const nombreSeguro = String(e.nombre ?? "").replace(/'/g, "\\'");
+const descripcionSegura = String(e.descripcion ?? "").replace(/'/g, "\\'");
+const serieSegura = String(e.numero_serie ?? "").replace(/'/g, "\\'");
+const activoSeguro = String(e.numero_activo ?? "").replace(/'/g, "\\'");
+const ubicacionSegura = String(e.ubicacion ?? "").replace(/'/g, "\\'");
+
+tabla.innerHTML+=`
+<tr>
+<td class="col-equipo">${e.nombre}</td>
+<td>${e.descripcion || "-"}</td>
+<td class="col-serie">${e.numero_serie}</td>
+<td>${e.numero_activo || "-"}</td>
+<td class="col-ubicacion">${e.ubicacion||"-"}</td>
+<td>${formatearEstadoEquipo(e.estado)}</td>
+<td>
+    <div class="acciones-linea">
+        <button onclick="actualizarCondicionEquipo(${e.id}, 'funcional')">Funcional</button>
+        <button onclick="actualizarCondicionEquipo(${e.id}, 'danado')">Danado</button>
+        <button onclick="devolverManualEquipo(${e.id})">Retornar</button>
+        <button onclick="editarEquipo(${e.id}, '${nombreSeguro}', '${descripcionSegura}', '${serieSegura}', '${activoSeguro}', '${ubicacionSegura}')">Editar</button>
+        <button onclick="eliminarEquipo(${e.id})">Eliminar</button>
+    </div>
+</td>
+</tr>`;
+});
+}
+
+async function agregarEquipoIndividual(){
+
+const equipo = {
+nombre: document.getElementById("nombre_equipo").value.trim(),
+descripcion: document.getElementById("descripcion_equipo").value.trim(),
+numero_serie: document.getElementById("numero_serie").value.trim(),
+numero_activo: document.getElementById("numero_activo").value.trim(),
+ubicacion: document.getElementById("ubicacion_equipo").value
+};
+
+const response = await fetch("http://localhost:3000/equipos-individuales",{
+method:"POST",
+headers:{ "Content-Type":"application/json"},
+body: JSON.stringify(equipo)
+});
+
+if(!response.ok){
+const data = await response.json();
+alert(data.error);
+return;
+}
+
+alert("Equipo agregado correctamente");
+
+document.getElementById("nombre_equipo").value="";
+document.getElementById("descripcion_equipo").value="";
+document.getElementById("numero_serie").value="";
+document.getElementById("numero_activo").value="";
+
+cargarEquiposAdmin();
+}
+
+async function eliminarEquipo(id){
+if(!confirm("Â¿Eliminar equipo?")) return;
+await fetch(`http://localhost:3000/equipos-individuales/${id}`,{method:"DELETE"});
+cargarEquiposAdmin();
+}
+
+async function editarEquipo(id, nombreActual, descripcionActual, serieActual, activoActual, ubicacionActual){
+const nombreNuevo = prompt("Editar nombre del equipo:", nombreActual);
+if(nombreNuevo === null) return;
+const nombre = nombreNuevo.trim();
+if(!nombre){
+alert("El nombre es obligatorio");
+return;
+}
+
+const descripcionNueva = prompt("Editar descripcion:", descripcionActual || "");
+if(descripcionNueva === null) return;
+const descripcion = descripcionNueva.trim();
+
+const serieNueva = prompt("Editar numero de serie:", serieActual);
+if(serieNueva === null) return;
+const numero_serie = serieNueva.trim();
+if(!numero_serie){
+alert("El numero de serie es obligatorio");
+return;
+}
+
+const activoNuevo = prompt("Editar Fix Asset / Low Value:", activoActual || "");
+if(activoNuevo === null) return;
+const numero_activo = activoNuevo.trim();
+
+const ubicacionNueva = prompt("Editar ubicacion:", ubicacionActual || "");
+if(ubicacionNueva === null) return;
+const ubicacion = ubicacionNueva.trim();
+
+const response = await fetch(`http://localhost:3000/equipos-individuales/${id}`,{
+method:"PUT",
+headers:{ "Content-Type":"application/json"},
+body: JSON.stringify({ nombre, descripcion, numero_serie, numero_activo, ubicacion })
+});
+
+if(!response.ok){
+const data = await response.json().catch(() => ({}));
+alert(data.error || "Error al editar equipo");
+return;
+}
+
+cargarEquiposAdmin();
+}
+
+function filtrarEquipos(){
+const filtro=document.getElementById("buscar_equipo").value.toLowerCase();
+const filas=document.querySelectorAll("#tabla_equipos tr");
+
+filas.forEach(fila=>{
+const texto=fila.innerText.toLowerCase();
+fila.style.display=texto.includes(filtro) ? "" : "none";
+});
+}
+
+/* ================= SOLICITUDES ================= */
+
+async function cargarSolicitudes(){
+
+    const tabla = document.getElementById("tabla_solicitudes");
+    tabla.innerHTML = "";
+
+    // ðŸ”µ Solicitudes nuevas
+    const resPendientes = await fetch("http://localhost:3000/asignaciones/pendientes");
+    const pendientes = await resPendientes.json();
+
+    pendientes.forEach(s=>{
+        tabla.innerHTML+=`
+        <tr>
+            <td>${s.tecnico}</td>
+            <td>${s.equipo}</td>
+            <td>${s.linea}</td>
+            <td>${new Date(s.fecha_solicitud).toLocaleString()}</td>
+            <td>
+                <button onclick="aprobarSolicitud(${s.id})">Aprobar</button>
+                <button onclick="rechazarSolicitud(${s.id})">Rechazar</button>
+            </td>
+        </tr>`;
+    });
+
+    // ðŸŸ¡ Devoluciones pendientes
+    const resDev = await fetch("http://localhost:3000/asignaciones/devoluciones-pendientes");
+    const devoluciones = await resDev.json();
+
+    devoluciones.forEach(s=>{
+        tabla.innerHTML+=`
+        <tr style="background:#fff3cd;">
+            <td>${s.tecnico}</td>
+            <td>${s.equipo}</td>
+            <td>${s.linea}</td>
+            <td>Pendiente devolucion</td>
+                        <td>
+                <button onclick="aprobarDevolucion(${s.id})">
+                    Aprobar devolucion
+                </button>
+                <button onclick="rechazarDevolucion(${s.id})">
+                    Rechazar devolucion
+                </button>
+            </td>
+        </tr>`;
+    });
+}
+
+async function aprobarSolicitud(id){
+
+    const response = await fetch(
+        `http://localhost:3000/asignaciones/${id}/aprobar`,
+        { method:"PUT" }
+    );
+
+    if(!response.ok){
+        alert("Error al aprobar solicitud");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+async function rechazarSolicitud(id){
+
+    const response = await fetch(
+        `http://localhost:3000/asignaciones/${id}/rechazar`,
+        { method:"PUT" }
+    );
+
+    if(!response.ok){
+        alert("Error al rechazar");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+async function aprobarDevolucion(id){
+
+    const response = await fetch(
+        `http://localhost:3000/asignaciones/${id}/aprobar-devolucion`,
+        { method:"PUT" }
+    );
+
+    if(!response.ok){
+        alert("Error al aprobar devolucion");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+async function rechazarDevolucion(id){
+
+    const response = await fetch(
+        `http://localhost:3000/asignaciones/${id}/rechazar-devolucion`,
+        { method:"PUT" }
+    );
+
+    if(!response.ok){
+        alert("Error al rechazar devolucion");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+
+async function cargarMaterialPorLinea(){
+const linea = document.getElementById("filtro_linea_material")?.value || "todas";
+const seccion = document.getElementById("filtro_seccion_material")?.value || "todas";
+
+const url = `http://localhost:3000/materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
+const res = await fetch(url);
+const data = await res.json();
+
+const tabla = document.getElementById("tabla_material_lineas");
+if(!tabla) return;
+
+if(!res.ok){
+    tabla.innerHTML = `<tr><td colspan="5">${data.error || "Error al cargar informacion"}</td></tr>`;
+    return;
+}
+
+tabla.innerHTML = "";
+if(!Array.isArray(data) || data.length === 0){
+    tabla.innerHTML = `<tr><td colspan="5">Sin datos</td></tr>`;
+    return;
+}
+
+data.forEach(item => {
+    tabla.innerHTML += `
+    <tr>
+        <td>${item.linea || "-"}</td>
+        <td>${item.seccion || "-"}</td>
+        <td>${item.material || "-"}</td>
+        <td>${item.acumulado_nuevo || 0}</td>
+        <td>${item.cambios_registrados || 0}</td>
+    </tr>`;
+});
+}
+
+
+function exportarMaterialPorLinea(){
+const linea = document.getElementById("filtro_linea_material")?.value || "todas";
+const seccion = document.getElementById("filtro_seccion_material")?.value || "todas";
+
+window.location.href =
+`http://localhost:3000/exportar-materiales-por-linea?linea=${encodeURIComponent(linea)}&seccion=${encodeURIComponent(seccion)}`;
+}
+
+/* ================= USUARIOS ================= */
+let usuariosCache = [];
+
+function limpiarCamposUsuario(){
+    const nombre = document.getElementById("nombre_usuario");
+    const numero = document.getElementById("numero_id_usuario");
+    const pass = document.getElementById("password_usuario");
+    const conf = document.getElementById("confirmar_password");
+    if (nombre) nombre.value = "";
+    if (numero) numero.value = "";
+    if (pass) pass.value = "";
+    if (conf) conf.value = "";
+}
+
+function formatearRolUsuario(rol){
+    if (rol === "tecnico") return "Tecnico de PFA";
+    if (rol === "empleado") return "Supervisor de PFA";
+    if (rol === "supervisor") return "Tecnico de Instrumentacion";
+    return rol || "-";
+}
+
+function renderizarTablaUsuarios(filtro = ""){
+    const tabla = document.getElementById("tabla-usuarios");
+    if (!tabla) return;
+
+    const texto = String(filtro || "").trim().toLowerCase();
+    const rolFiltro = String(document.getElementById("filtro_rol_usuario")?.value || "todos").toLowerCase();
+    const rows = usuariosCache.filter(u => {
+        const cumpleTexto = !texto || (
+            String(u.nombre || "").toLowerCase().includes(texto) ||
+            String(u.numero_id || "").toLowerCase().includes(texto) ||
+            String(u.rol || "").toLowerCase().includes(texto)
+        );
+        const cumpleRol = rolFiltro === "todos" || String(u.rol || "").toLowerCase() === rolFiltro;
+        return cumpleTexto && cumpleRol;
+    });
+
+    tabla.innerHTML = "";
+
+    if (rows.length === 0) {
+        tabla.innerHTML = `<tr><td colspan="6">Sin usuarios</td></tr>`;
+        return;
+    }
+
+    rows.forEach(u => {
+        const nombre = String(u.nombre || "").replace(/'/g, "\\'");
+        const numero = String(u.numero_id || "").replace(/'/g, "\\'");
+        const rol = String(u.rol || "").replace(/'/g, "\\'");
+        const estadoTexto = u.activo ? "Activo" : "Deshabilitado";
+        const pass = String(u.contrasena || "");
+
+        tabla.innerHTML += `
+        <tr>
+            <td>${u.nombre || "-"}</td>
+            <td>${u.numero_id || "-"}</td>
+            <td>${formatearRolUsuario(u.rol)}</td>
+            <td>${estadoTexto}</td>
+            <td>${pass || "-"}</td>
+            <td>
+                <div class="acciones-linea">
+                    <button onclick="editarUsuario(${u.id}, '${nombre}', '${numero}', '${rol}')">Editar</button>
+                    <button onclick="actualizarEstadoUsuario(${u.id}, ${u.activo ? "true" : "false"})">${u.activo ? "Deshabilitar" : "Habilitar"}</button>
+                    <button onclick="eliminarUsuario(${u.id})">Eliminar</button>
+                </div>
+            </td>
+        </tr>`;
+    });
+}
+
+async function cargarUsuarios(){
+    try {
+        const res = await fetch("http://localhost:3000/usuarios");
+        const data = await res.json().catch(() => []);
+
+        if (!res.ok) {
+            alert(data.error || "Error al cargar usuarios");
+            return;
+        }
+
+        usuariosCache = Array.isArray(data) ? data : [];
+        renderizarTablaUsuarios(document.getElementById("buscar_usuario")?.value || "");
+    } catch (error) {
+        console.error(error);
+        alert("Error de conexion al cargar usuarios");
+    }
+}
+
+function buscarUsuarios(){
+    const texto = document.getElementById("buscar_usuario")?.value || "";
+    renderizarTablaUsuarios(texto);
+}
+
+async function crearUsuario(){
+    const nombre = document.getElementById("nombre_usuario")?.value?.trim();
+    const numero_id = document.getElementById("numero_id_usuario")?.value?.trim();
+    const rol = document.getElementById("rol_usuario")?.value;
+    const contrasena = document.getElementById("password_usuario")?.value || "";
+    const confirmar = document.getElementById("confirmar_password")?.value || "";
+
+    if (!nombre || !numero_id || !rol || !contrasena || !confirmar) {
+        alert("Datos incompletos");
+        return;
+    }
+
+    if (contrasena !== confirmar) {
+        alert("Las contrasenas no coinciden");
+        return;
+    }
+
+    const res = await fetch("http://localhost:3000/usuarios", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+            nombre,
+            numero_id,
+            rol,
+            contrasena
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        alert(data.error || "No se pudo crear usuario");
+        return;
+    }
+
+    limpiarCamposUsuario();
+    cargarUsuarios();
+}
+
+async function editarUsuario(id, nombreActual, numeroActual, rolActual){
+    const nombreNuevo = prompt("Editar nombre:", nombreActual);
+    if (nombreNuevo === null) return;
+    const nombre = nombreNuevo.trim();
+    if (!nombre) {
+        alert("Nombre invalido");
+        return;
+    }
+
+    const numeroNuevo = prompt("Editar numero ID:", numeroActual);
+    if (numeroNuevo === null) return;
+    const numero_id = numeroNuevo.trim();
+    if (!numero_id) {
+        alert("Numero ID invalido");
+        return;
+    }
+
+    const rolNuevo = prompt("Editar rol (tecnico de pfa/supervisor de pfa/tecnico de instrumentacion):", rolActual);
+    if (rolNuevo === null) return;
+    let rol = rolNuevo.trim().toLowerCase();
+    if (rol === "tecnico de pfa" || rol === "tecnico_pfa" || rol === "pfa tecnico" || rol === "tecnico") {
+        rol = "tecnico";
+    }
+    if (rol === "supervisor de pfa" || rol === "supervisor_pfa" || rol === "pfa") {
+        rol = "empleado";
+    }
+    if (rol === "tecnico de instrumentacion" || rol === "tecnico_de_instrumentacion" || rol === "instrumentacion") {
+        rol = "supervisor";
+    }
+    if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
+        alert("Rol invalido");
+        return;
+    }
+
+    const passNueva = prompt("Nueva contrasena (opcional, deja vacio para mantener):", "");
+    if (passNueva === null) return;
+
+    const res = await fetch(`http://localhost:3000/usuarios/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+            nombre,
+            numero_id,
+            rol,
+            contrasena: String(passNueva || "").trim()
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        alert(data.error || "No se pudo editar usuario");
+        return;
+    }
+
+    cargarUsuarios();
+}
+
+async function actualizarEstadoUsuario(id, activoActual){
+    const siguiente = !activoActual;
+    const res = await fetch(`http://localhost:3000/usuarios/${id}/estado`, {
+        method: "PUT",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({ activo: siguiente })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        alert(data.error || "No se pudo actualizar estado");
+        return;
+    }
+
+    cargarUsuarios();
+}
+
+async function eliminarUsuario(id){
+    if (!confirm("Eliminar usuario?")) return;
+
+    const res = await fetch(`http://localhost:3000/usuarios/${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        alert(data.error || "No se pudo eliminar usuario");
+        return;
+    }
+
+    cargarUsuarios();
+}
+
+function abrirUsuarios(){
+    mostrarSeccion("usuarios");
+}
+
+const diasSemanaTexto = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
+
+async function cargarHorariosLogin(){
+    const rol = document.getElementById("horario_rol")?.value || "empleado";
+    const tabla = document.getElementById("tabla_horarios_login");
+    if(!tabla) return;
+
+    try {
+        const res = await fetch(`http://localhost:3000/horarios-login?rol=${encodeURIComponent(rol)}`);
+        const data = await res.json();
+
+        if(!res.ok){
+            tabla.innerHTML = `<tr><td colspan="6">${data.error || "Error al cargar horarios"}</td></tr>`;
+            return;
+        }
+
+        tabla.innerHTML = "";
+        if(!Array.isArray(data) || data.length === 0){
+            tabla.innerHTML = '<tr><td colspan="6">Sin horarios configurados</td></tr>';
+            return;
+        }
+
+        data.forEach(h => {
+            const dia = Number(h.dia_semana);
+            tabla.innerHTML += `
+            <tr>
+                <td>${h.rol}</td>
+                <td>${diasSemanaTexto[dia] || "-"}</td>
+                <td>${h.hora_inicio || "-"}</td>
+                <td>${h.hora_fin || "-"}</td>
+                <td>${h.activo ? "Activo" : "Inactivo"}</td>
+                <td>
+    <div class="acciones-linea">
+        <button onclick="editarHorarioLogin(${h.id}, ${dia}, '${h.hora_inicio}', '${h.hora_fin}', ${h.activo ? "true" : "false"})">Editar</button>
+        <button onclick="eliminarHorarioLogin(${h.id})">Eliminar</button>
+    </div>
+</td>
+            </tr>`;
+        });
+    } catch (error) {
+        console.error(error);
+        tabla.innerHTML = '<tr><td colspan="6">Error al cargar horarios</td></tr>';
+    }
+}
+
+async function agregarHorarioLogin(){
+    const rol = document.getElementById("horario_rol")?.value || "empleado";
+    const dia_semana = Number(document.getElementById("horario_dia")?.value);
+    const hora_inicio = document.getElementById("horario_inicio")?.value;
+    const hora_fin = document.getElementById("horario_fin")?.value;
+
+    if(!hora_inicio || !hora_fin){
+        alert("Selecciona hora inicio y hora fin");
+        return;
+    }
+
+    const res = await fetch("http://localhost:3000/horarios-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rol, dia_semana, hora_inicio, hora_fin, activo: true })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+        alert(data.error || "No se pudo guardar el horario");
+        return;
+    }
+
+    document.getElementById("horario_inicio").value = "";
+    document.getElementById("horario_fin").value = "";
+    cargarHorariosLogin();
+}
+
+
+async function editarHorarioLogin(id, diaActual, inicioActual, finActual, activoActual){
+    const rol = document.getElementById("horario_rol")?.value || "empleado";
+
+    const diaTexto = prompt("Dia (0=Domingo, 1=Lunes ... 6=Sabado):", String(diaActual));
+    if(diaTexto === null) return;
+    const dia_semana = Number(String(diaTexto).trim());
+    if(!Number.isInteger(dia_semana) || dia_semana < 0 || dia_semana > 6){
+        alert("Dia invalido");
+        return;
+    }
+
+    const hora_inicio = prompt("Hora inicio (HH:MM):", String(inicioActual || ""));
+    if(hora_inicio === null) return;
+
+    const hora_fin = prompt("Hora fin (HH:MM):", String(finActual || ""));
+    if(hora_fin === null) return;
+
+    const activoTexto = prompt("Activo? (si/no):", activoActual ? "si" : "no");
+    if(activoTexto === null) return;
+    const activo = !/^(no|n|0|false)$/i.test(String(activoTexto).trim());
+
+    const res = await fetch(`http://localhost:3000/horarios-login/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            rol,
+            dia_semana,
+            hora_inicio: String(hora_inicio).trim(),
+            hora_fin: String(hora_fin).trim(),
+            activo
+        })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+        alert(data.error || "No se pudo editar el horario");
+        return;
+    }
+
+    cargarHorariosLogin();
+}
+async function eliminarHorarioLogin(id){
+    if(!confirm("Eliminar horario?")) return;
+
+    const res = await fetch(`http://localhost:3000/horarios-login/${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+        alert(data.error || "No se pudo eliminar horario");
+        return;
+    }
+
+    cargarHorariosLogin();
+}
+/* ================= Sesion ================= */
+function toggleLogoutMenu(event){
+    if (event) event.stopPropagation();
+    const menu = document.getElementById("logout-dropdown");
+    if (!menu) return;
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function cerrarSesion(){
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("token");
+    window.location.href = "login.html";
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".logout-menu");
+    const menu = document.getElementById("logout-dropdown");
+    if (!wrap || !menu) return;
+    if (!wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+});
+
+const usuarioAuth = JSON.parse(localStorage.getItem("usuario"));
+if (!usuarioAuth || usuarioAuth.rol !== "admin") {
+    alert("Acceso no autorizado");
+    window.location.href = "login.html";
+}
+
+const bienvenidaAdmin = document.getElementById("bienvenida_admin");
+if (bienvenidaAdmin) {
+    const nombreAdmin = (usuarioAuth && usuarioAuth.nombre) ? usuarioAuth.nombre : "Administrador";
+    bienvenidaAdmin.textContent = `Bienvenido ${nombreAdmin}.`;
+}
+
+const originalFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+    const headers = new Headers(init.headers || {});
+    const token = localStorage.getItem("token");
+    if (token) headers.set("Authorization", "Bearer " + token);
+    return originalFetch(input, { ...init, headers });
+};
+
+/* ================= EXPORTAR ================= */
+function exportarInventario(){
+    window.location.href="http://localhost:3000/exportar-inventario";
+}
+
+function exportarInventarioHerramientaModulo(){
+    window.location.href="http://localhost:3000/exportar-inventario-herramienta-modulo";
+}
+
+function exportarRequisiciones(){
+    const inicio=document.getElementById("fecha_inicio_ensamble").value;
+    const fin=document.getElementById("fecha_fin_ensamble").value;
+    const usuario=JSON.parse(localStorage.getItem("usuario"));
+
+    if(!inicio || !fin){
+        alert("Seleccione rango de fechas");
+        return;
+    }
+
+    if(!usuario){
+        alert("Usuario no identificado");
+        return;
+    }
+
+    window.location.href=
+    `http://localhost:3000/exportar-requisiciones?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
+}
+
+function exportarRequisicionesModulo(){
+    const inicio=document.getElementById("fecha_inicio_modulo").value;
+    const fin=document.getElementById("fecha_fin_modulo").value;
+    const usuario=JSON.parse(localStorage.getItem("usuario"));
+
+    if(!inicio || !fin){
+        alert("Seleccione rango de fechas");
+        return;
+    }
+
+    if(!usuario){
+        alert("Usuario no identificado");
+        return;
+    }
+
+    window.location.href=
+    `http://localhost:3000/exportar-requisiciones-modulo?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
+}
+/* ================= INICIO ================= */
+
+cargarLineas();
+cargarMateriales();
+cargarHerramientasModulo();
+cargarEquiposAdmin();
+cargarSolicitudes();
+cargarMaterialPorLinea();
+
+
+setInterval(() => {
+    if (estaEditandoFormulario()) return;
+    refrescarSeccionActivaAdmin();
+}, 5000);
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
