@@ -64,7 +64,7 @@
     <div class="card login-card">
         <h2>Iniciar Sesion</h2>
 
-        <input type="number" id="numero_id" placeholder="ID"><br><br>
+        <input type="text" id="numero_id" placeholder="ID (ej: KCH001 o 12345)"><br><br>
         <input type="password" id="contrasena" placeholder="Contrasena"><br><br>
         <button onclick="login()">Ingresar</button>
 
@@ -207,10 +207,15 @@
     }
 
     async function login() {
-        const numero_id = document.getElementById("numero_id").value;
+        const numero_id = String(document.getElementById("numero_id").value || "").trim();
         const contrasena = document.getElementById("contrasena").value;
         const msg = document.getElementById("mensaje");
         msg.innerText = "";
+
+        if (!numero_id) {
+            msg.innerText = "Ingresa tu ID de usuario";
+            return;
+        }
 
         try {
             const response = await fetch("/login", {

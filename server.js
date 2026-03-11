@@ -160,6 +160,25 @@ async function asegurarEstadoUsuarios() {
     `);
 }
 
+async function asegurarNumeroIdAlfanumerico() {
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'usuarios'
+                  AND column_name = 'numero_id'
+                  AND data_type NOT IN ('character varying', 'text')
+            ) THEN
+                ALTER TABLE usuarios
+                ALTER COLUMN numero_id TYPE VARCHAR(100)
+                USING numero_id::text;
+            END IF;
+        END $$;
+    `);
+}
+
 
 async function asegurarHorariosLogin() {
     await pool.query(`
@@ -247,8 +266,12 @@ app.get("/", (req, res) => {
 ///////////////////////////////////////////
 ////////Login - PestaÃ±a///////////
 app.post("/login", async (req, res) => {
-    const numero_id = req.body.numero_id;
+    const numero_id = String(req.body.numero_id || "").trim();
     const contrasena = req.body["contrase\u00f1a"] || req.body.contrasena || req.body.password;
+
+    if (!numero_id || !contrasena) {
+        return res.json({ success: false, message: "Credenciales incorrectas" });
+    }
 
     try {
         const result = await pool.query(
@@ -1411,8 +1434,10 @@ app.put("/asignaciones/:id/rechazar-devolucion", async (req, res) => {
 ////////Agregar Usuarios - PestaÃ±a///////////
 //Agregar o crear Usuario
 app.post("/usuarios", async (req, res) => {
-    const { nombre, numero_id, rol } = req.body;
-    const contrasena = req.body["contrase\u00f1a"] || req.body.contrasena || req.body.password || "";
+    const nombre = String(req.body.nombre || "").trim();
+    const numero_id = String(req.body.numero_id || "").trim();
+    const rol = String(req.body.rol || "").trim().toLowerCase();
+    const contrasena = String(req.body["contrase\u00f1a"] || req.body.contrasena || req.body.password || "");
 
     if (!nombre || !numero_id || !contrasena || !rol) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -1420,6 +1445,10 @@ app.post("/usuarios", async (req, res) => {
 
     if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
         return res.status(400).json({ error: "Rol invÃ¡lido" });
+    }
+
+    if (!/^[A-Za-z0-9_-]+$/.test(numero_id)) {
+        return res.status(400).json({ error: "Numero ID invalido. Usa solo letras y numeros." });
     }
 
     try {
@@ -1464,8 +1493,10 @@ app.get("/usuarios", async (req, res) => {
 });
 app.put("/usuarios/:id", async (req, res) => {
     const { id } = req.params;
-    const { nombre, numero_id, rol } = req.body;
-    const contrasenaNueva = req.body["contrase\u00f1a"] || req.body.contrasena || req.body.password || "";
+    const nombre = String(req.body.nombre || "").trim();
+    const numero_id = String(req.body.numero_id || "").trim();
+    const rol = String(req.body.rol || "").trim().toLowerCase();
+    const contrasenaNueva = String(req.body["contrase\u00f1a"] || req.body.contrasena || req.body.password || "");
 
     if (!nombre || !numero_id || !rol) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -1473,6 +1504,10 @@ app.put("/usuarios/:id", async (req, res) => {
 
     if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
         return res.status(400).json({ error: "Rol invalido" });
+    }
+
+    if (!/^[A-Za-z0-9_-]+$/.test(numero_id)) {
+        return res.status(400).json({ error: "Numero ID invalido. Usa solo letras y numeros." });
     }
 
     try {
@@ -2658,6 +2693,7 @@ Promise.all([
     asegurarIntegridadAsignaciones(),
     asegurarEstructuraRequisiciones(),
     asegurarEstadoUsuarios(),
+    asegurarNumeroIdAlfanumerico(),
     asegurarHorariosLogin(),
     asegurarEstructuraHerramientaModulo()
 ])

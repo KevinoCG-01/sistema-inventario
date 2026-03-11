@@ -359,7 +359,7 @@ style="margin-bottom:15px; padding:8px; width:300px;">
         <label>Nombre de Usuario:</label>
         <input type="text" id="nombre_usuario" placeholder="Nombre completo">
         <label>Numero de Usuario (ID):</label>
-        <input type="text" id="numero_id_usuario" placeholder="Ej: 12345">
+        <input type="text" id="numero_id_usuario" placeholder="Ej: KCH001 o 12345">
 
         <label>Tecnico de PFA / Supervisor de PFA / Tecnico de Instrumentacion:</label>
         <select id="rol_usuario">
@@ -1429,6 +1429,10 @@ function buscarUsuarios(){
     renderizarTablaUsuarios(texto);
 }
 
+function idUsuarioValido(valor){
+    return /^[A-Za-z0-9_-]+$/.test(String(valor || ""));
+}
+
 async function crearUsuario(){
     const nombre = document.getElementById("nombre_usuario")?.value?.trim();
     const numero_id = document.getElementById("numero_id_usuario")?.value?.trim();
@@ -1443,6 +1447,11 @@ async function crearUsuario(){
 
     if (contrasena !== confirmar) {
         alert("Las contrasenas no coinciden");
+        return;
+    }
+
+    if (!idUsuarioValido(numero_id)) {
+        alert("Numero ID invalido. Usa solo letras, numeros, guion o guion bajo.");
         return;
     }
 
@@ -1481,6 +1490,10 @@ async function editarUsuario(id, nombreActual, numeroActual, rolActual){
     const numero_id = numeroNuevo.trim();
     if (!numero_id) {
         alert("Numero ID invalido");
+        return;
+    }
+    if (!idUsuarioValido(numero_id)) {
+        alert("Numero ID invalido. Usa solo letras, numeros, guion o guion bajo.");
         return;
     }
 
