@@ -190,7 +190,7 @@ tbody tr:hover {
 </select><br><br>
 
 <input type="number" id="cantidad_stock" placeholder="Cantidad en Stock"><br><br>
-<input type="number" id="stock_minimo" placeholder="Stock Ma­nimo"><br><br>
+<input type="number" id="stock_minimo" placeholder="Stock Minimo"><br><br>
 <input type="number" id="precio_unitario" step="0.01" min="0" placeholder="Precio unitario"><br><br>
 
 <button onclick="agregarMaterial()">Agregar Material</button>
@@ -395,7 +395,7 @@ style="margin-bottom:15px; padding:8px; width:300px;">
         </select>
     </div>
 
-    <h2>Tabla de Supervisor de PFA, Tecnicos de PFA y Tecnico de Instrumentacion</h2>
+    <h2>Tabla de usuarios: Supervisor de PFA, Tecnicos de PFA y Tecnico de Ins</h2>
 
     <table border="1" cellpadding="8" style="width:100%; max-width:1200px;">
         <thead>
@@ -419,7 +419,7 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 <div id="horarios" class="seccion">
 
 <h2>Control de horarios de inicio de sesion</h2>
-<p style="margin:8px 0 16px; opacity:.85;">Define hasta 24 rangos por rol para permitir acceso.</p>
+<p style="margin:8px 0 16px; opacity:.85;">Hasta 24 rangos por rol para permitir acceso.</p>
 
 <div style="display:grid; grid-template-columns:repeat(4,minmax(160px,1fr)); gap:10px; max-width:900px; margin-bottom:12px;">
     <select id="horario_rol" onchange="cargarHorariosLogin()">
@@ -572,11 +572,11 @@ try{
             window.location.href = "login.html";
             return;
         }
-        throw new Error("Error al cargar lÃ­neas");
+        throw new Error("Error al cargar lineas");
     }
 
     const data = await res.json();
-    if(!Array.isArray(data)) throw new Error("Respuesta invÃ¡lida de /lineas");
+    if(!Array.isArray(data)) throw new Error("Respuesta invalida de /lineas");
 
     const tabla = document.getElementById("tabla_lineas");
     tabla.innerHTML = "";
@@ -635,18 +635,18 @@ cargarLineas();
 }
 
 async function eliminarLinea(id){
-if(!confirm("Â¿Eliminar lÃ­nea?")) return;
+if(!confirm("¿Estas seguro que quieres eliminar la linea?")) return;
 await fetch(`/lineas/${id}`,{method:"DELETE"});
 cargarLineas();
 }
 
 async function editarLinea(id, nombreActual){
-const nuevoNombre = prompt("Editar nombre de la lÃ­nea:", nombreActual);
+const nuevoNombre = prompt("Editar nombre de la linea:", nombreActual);
 if(nuevoNombre === null) return;
 
 const nombre = nuevoNombre.trim();
 if(!nombre){
-alert("El nombre no puede estar vacÃ­o");
+alert("El nombre no puede estar vacio");
 return;
 }
 
@@ -769,7 +769,7 @@ cargarMateriales();
 }
 
 async function eliminarMaterial(id){
-if(!confirm("Â¿Eliminar material?")) return;
+if(!confirm("¿Estas seguro de eliminar el material?")) return;
 await fetch(`/materiales/${id}`,{method:"DELETE"});
 cargarMateriales();
 }
@@ -1042,7 +1042,7 @@ cargarEquiposAdmin();
 
 
 async function devolverManualEquipo(id){
-if(!confirm("Confirmar devolucion manual de este equipo?")) return;
+if(!confirm("¿Confirmar devolucion manual de este equipo?")) return;
 
 const response = await fetch(`/equipos-individuales/${id}/devolver-manual`, {
 method:"PUT"

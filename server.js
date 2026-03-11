@@ -383,7 +383,6 @@ app.delete("/lineas/:id", async (req, res) => {
     }
 });
 
-
 app.get("/horarios-login", async (req, res) => {
     try {
         const rol = String(req.query.rol || "empleado").toLowerCase();

@@ -19,12 +19,7 @@ npm install
 
 ```env
 PORT=3000
-DB_USER=postgres
-DB_PASSWORD=tu_password
-DB_HOST=localhost
-DB_PORT=6000
-DB_NAME=sistema_inventario
-DB_SSL=false
+DATABASE_URL=postgresql://usuario:password@host:5432/base_de_datos
 ```
 
 3. Inicia el servidor:
