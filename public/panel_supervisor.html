@@ -17,13 +17,48 @@
             font-size: 2rem;
             margin: 0;
         }
+
+        .filtros-devoluciones-cerradas {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0 0 12px;
+        }
+
+        .filtro-devolucion-btn {
+            background: #e2e8f0;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+        }
+
+        .filtro-devolucion-btn.activo {
+            border-color: transparent;
+            background: linear-gradient(135deg, var(--brand-2), #0284c7);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
+<div id="menu_backdrop_supervisor" class="side-menu-backdrop" onclick="cerrarMenuLateralSupervisor()"></div>
+<aside id="menu_lateral_supervisor" class="side-menu">
+<h3 class="side-menu-title">Menu</h3>
+<div class="side-menu-items">
+    <button class="side-menu-item" data-menu-supervisor="consumibles" onclick="mostrarConsumibles()">Consumibles</button>
+    <button class="side-menu-item" data-menu-supervisor="modulo" onclick="mostrarModulo()">Herramienta modulo</button>
+    <button class="side-menu-item" data-menu-supervisor="retornos" onclick="mostrarRetornos()">Retornos consumibles</button>
+    <button class="side-menu-item" data-menu-supervisor="retornos_modulo" onclick="mostrarRetornosModulo()">Devolucion herramienta modulo</button>
+    <button class="side-menu-item" data-menu-supervisor="equipos" onclick="mostrarEquipos()">Equipos</button>
+    <button class="side-menu-item" data-menu-supervisor="cerradas" onclick="mostrarCerradas()">Requisiciones cerradas</button>
+    <button class="side-menu-item" data-menu-supervisor="devoluciones_cerradas" onclick="mostrarDevolucionesCerradas()">Devoluciones cerradas</button>
+</div>
+</aside>
 <div class="container">
 <h2 class="imc-encabezado">Instrumentacion Material Control "IMC"</h2>
 <div class="panel-header">
+<div class="panel-header-left">
+<button class="menu-toggle-btn" onclick="toggleMenuLateralSupervisor(event)" aria-label="Abrir menu">&#9776;</button>
 <h1 class="titulo-tecnico-instrumentacion">Tecnico de Instrumentacion</h1>
+</div>
 <div class="logout-menu">
 <button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
 <div id="logout-dropdown" class="logout-dropdown">
@@ -33,13 +68,6 @@
 </div>
 <h2 id="bienvenida"></h2>
 
-<div style="margin-bottom:20px;">
-    <button onclick="mostrarConsumibles()">Ver Consumibles</button>
-    <button onclick="mostrarModulo()">Ver Herramienta Modulo</button>
-    <button onclick="mostrarEquipos()">Ver Equipos</button>
-    <button onclick="mostrarCerradas()">Ver Cerradas</button>
-</div>
-
 <div id="seccion_consumibles" class="card">
     <h2>Requisiciones de Consumibles</h2>
     <div id="requisiciones"></div>
@@ -48,6 +76,24 @@
 <div id="seccion_modulo" class="card" style="display:none;">
     <h2>Requisiciones de Herramienta Modulo</h2>
     <div id="requisiciones_modulo"></div>
+</div>
+
+<div id="seccion_retornos" class="card" style="display:none;">
+    <h2>Requisiciones de Devolucion Activas</h2>
+    <p style="margin:0 0 12px; opacity:.86;">
+        Devoluciones activas para aceptar retorno o devolver material a la linea.
+    </p>
+
+    <div id="retornos_ensamble"></div>
+</div>
+
+<div id="seccion_retornos_modulo" class="card" style="display:none;">
+    <h2>Devolucion de Herramienta de Modulo Activas</h2>
+    <p style="margin:0 0 12px; opacity:.86;">
+        Aqui llegan devoluciones de herramienta de modulo. Al aprobarse se cierran automaticamente.
+    </p>
+    <h3 style="margin: 12px 0 8px;">Herramienta modulo</h3>
+    <div id="retornos_modulo_activos"></div>
 </div>
 
 <div id="seccion_equipos" class="card" style="display:none;">
@@ -119,6 +165,26 @@
     <div id="requisiciones_cerradas"></div>
 </div>
 
+<div id="seccion_devoluciones_cerradas" class="card" style="display:none;">
+    <h2>Devoluciones Cerradas</h2>
+    <p style="margin:0 0 12px; opacity:.86;">
+        Devoluciones completas/cerradas.
+    </p>
+    <div class="filtros-devoluciones-cerradas">
+        <button id="filtro_dev_cerr_todas" class="filtro-devolucion-btn activo" type="button" onclick="cambiarFiltroDevolucionesCerradas('todas')">Todas</button>
+        <button id="filtro_dev_cerr_ensamble" class="filtro-devolucion-btn" type="button" onclick="cambiarFiltroDevolucionesCerradas('ensamble')">Ensamble</button>
+        <button id="filtro_dev_cerr_modulo" class="filtro-devolucion-btn" type="button" onclick="cambiarFiltroDevolucionesCerradas('modulo')">Herramienta modulo</button>
+    </div>
+    <div id="bloque_cerradas_ensamble">
+        <h3 style="margin: 12px 0 8px;">Ensamble (consumible y herramienta)</h3>
+        <div id="retornos_cerrados_ensamble"></div>
+    </div>
+    <div id="bloque_cerradas_modulo">
+        <h3 style="margin: 12px 0 8px;">Herramienta modulo</h3>
+        <div id="retornos_cerrados_modulo"></div>
+    </div>
+</div>
+
 </div>
 
 <script>
@@ -130,11 +196,68 @@ function estaEditandoFormulario(){
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+let filtroDevolucionesCerradas = "todas";
+
+function actualizarEstadoBotonFiltroDevoluciones() {
+    const todos = document.getElementById("filtro_dev_cerr_todas");
+    const ensamble = document.getElementById("filtro_dev_cerr_ensamble");
+    const modulo = document.getElementById("filtro_dev_cerr_modulo");
+    if (todos) todos.classList.toggle("activo", filtroDevolucionesCerradas === "todas");
+    if (ensamble) ensamble.classList.toggle("activo", filtroDevolucionesCerradas === "ensamble");
+    if (modulo) modulo.classList.toggle("activo", filtroDevolucionesCerradas === "modulo");
+}
+
+function aplicarFiltroDevolucionesCerradas() {
+    const bloqueEnsamble = document.getElementById("bloque_cerradas_ensamble");
+    const bloqueModulo = document.getElementById("bloque_cerradas_modulo");
+    if (!bloqueEnsamble || !bloqueModulo) return;
+
+    const mostrarEnsamble = filtroDevolucionesCerradas === "todas" || filtroDevolucionesCerradas === "ensamble";
+    const mostrarModulo = filtroDevolucionesCerradas === "todas" || filtroDevolucionesCerradas === "modulo";
+    bloqueEnsamble.style.display = mostrarEnsamble ? "block" : "none";
+    bloqueModulo.style.display = mostrarModulo ? "block" : "none";
+    actualizarEstadoBotonFiltroDevoluciones();
+}
+
+function cambiarFiltroDevolucionesCerradas(filtro) {
+    const valor = String(filtro || "").toLowerCase();
+    if (valor === "ensamble" || valor === "modulo" || valor === "todas") {
+        filtroDevolucionesCerradas = valor;
+    } else {
+        filtroDevolucionesCerradas = "todas";
+    }
+    aplicarFiltroDevolucionesCerradas();
+}
+
 function toggleLogoutMenu(event){
     if (event) event.stopPropagation();
     const menu = document.getElementById("logout-dropdown");
     if (!menu) return;
     menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function toggleMenuLateralSupervisor(event){
+    if (event) event.stopPropagation();
+    const panel = document.getElementById("menu_lateral_supervisor");
+    const backdrop = document.getElementById("menu_backdrop_supervisor");
+    if (!panel || !backdrop) return;
+    const abrir = !panel.classList.contains("open");
+    panel.classList.toggle("open", abrir);
+    backdrop.classList.toggle("open", abrir);
+}
+
+function cerrarMenuLateralSupervisor(){
+    const panel = document.getElementById("menu_lateral_supervisor");
+    const backdrop = document.getElementById("menu_backdrop_supervisor");
+    if (!panel || !backdrop) return;
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+}
+
+function actualizarMenuLateralSupervisor(id){
+    document.querySelectorAll("#menu_lateral_supervisor .side-menu-item[data-menu-supervisor]").forEach(btn => {
+        btn.classList.toggle("activo", btn.dataset.menuSupervisor === id);
+    });
 }
 
 function cerrarSesion(){
@@ -150,6 +273,16 @@ document.addEventListener("click", (e) => {
     if (!wrap.contains(e.target)) {
         menu.style.display = "none";
     }
+
+    const panel = document.getElementById("menu_lateral_supervisor");
+    const toggle = document.querySelector(".menu-toggle-btn");
+    if (panel && panel.classList.contains("open")) {
+        const clickEnPanel = panel.contains(e.target);
+        const clickEnToggle = !!(toggle && toggle.contains(e.target));
+        if (!clickEnPanel && !clickEnToggle) {
+            cerrarMenuLateralSupervisor();
+        }
+    }
 });
 const usuario = JSON.parse(localStorage.getItem("usuario"));
 
@@ -163,33 +296,93 @@ document.getElementById("bienvenida").innerText = "Bienvenido " + usuario.nombre
 function mostrarConsumibles() {
     document.getElementById("seccion_consumibles").style.display = "block";
     document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
     document.getElementById("seccion_equipos").style.display = "none";
     document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("consumibles");
+    cerrarMenuLateralSupervisor();
     cargarRequisiciones();
 }
 
 function mostrarModulo() {
     document.getElementById("seccion_consumibles").style.display = "none";
     document.getElementById("seccion_modulo").style.display = "block";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
     document.getElementById("seccion_equipos").style.display = "none";
     document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("modulo");
+    cerrarMenuLateralSupervisor();
     cargarRequisicionesModulo();
+}
+
+function mostrarRetornos() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "block";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("retornos");
+    cerrarMenuLateralSupervisor();
+    cargarRetornos();
+}
+
+function mostrarRetornosModulo() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "block";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("retornos_modulo");
+    cerrarMenuLateralSupervisor();
+    cargarRetornosModulo();
 }
 
 function mostrarEquipos() {
     document.getElementById("seccion_consumibles").style.display = "none";
     document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
     document.getElementById("seccion_equipos").style.display = "block";
     document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("equipos");
+    cerrarMenuLateralSupervisor();
     cargarTablasEquipos();
 }
 
 function mostrarCerradas() {
     document.getElementById("seccion_consumibles").style.display = "none";
     document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
     document.getElementById("seccion_equipos").style.display = "none";
     document.getElementById("seccion_cerradas").style.display = "block";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "none";
+    actualizarMenuLateralSupervisor("cerradas");
+    cerrarMenuLateralSupervisor();
     cargarRequisicionesCerradas();
+}
+
+function mostrarDevolucionesCerradas() {
+    document.getElementById("seccion_consumibles").style.display = "none";
+    document.getElementById("seccion_modulo").style.display = "none";
+    document.getElementById("seccion_retornos").style.display = "none";
+    document.getElementById("seccion_retornos_modulo").style.display = "none";
+    document.getElementById("seccion_equipos").style.display = "none";
+    document.getElementById("seccion_cerradas").style.display = "none";
+    document.getElementById("seccion_devoluciones_cerradas").style.display = "block";
+    actualizarMenuLateralSupervisor("devoluciones_cerradas");
+    cerrarMenuLateralSupervisor();
+    aplicarFiltroDevolucionesCerradas();
+    cargarDevolucionesCerradas();
 }
 
 function aplicarFiltroCerradas() {
@@ -199,13 +392,19 @@ function aplicarFiltroCerradas() {
 function refrescarSeccionActivaSupervisor() {
     const consumibles = document.getElementById("seccion_consumibles").style.display !== "none";
     const modulo = document.getElementById("seccion_modulo").style.display !== "none";
+    const retornos = document.getElementById("seccion_retornos").style.display !== "none";
+    const retornosModulo = document.getElementById("seccion_retornos_modulo").style.display !== "none";
     const equipos = document.getElementById("seccion_equipos").style.display !== "none";
     const cerradas = document.getElementById("seccion_cerradas").style.display !== "none";
+    const devolucionesCerradas = document.getElementById("seccion_devoluciones_cerradas").style.display !== "none";
 
     if (consumibles) cargarRequisiciones();
     if (modulo) cargarRequisicionesModulo();
+    if (retornos) cargarRetornos();
+    if (retornosModulo) cargarRetornosModulo();
     if (equipos) cargarTablasEquipos();
     if (cerradas) cargarRequisicionesCerradas();
+    if (devolucionesCerradas) cargarDevolucionesCerradas();
 }
 
 async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo) {
@@ -291,11 +490,199 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
 }
 
 async function cargarRequisiciones() {
-    await renderRequisiciones("requisiciones", "/requisiciones-detalle?origen=ensamble", "entrega_", "ensamble");
+    await renderRequisiciones("requisiciones", "/requisiciones-detalle?origen=ensamble&movimiento=sin_retorno", "entrega_", "ensamble");
 }
 
 async function cargarRequisicionesModulo() {
-    await renderRequisiciones("requisiciones_modulo", "/requisiciones-detalle?origen=modulo", "entrega_mod_", "modulo");
+    await renderRequisiciones("requisiciones_modulo", "/requisiciones-detalle?origen=modulo&movimiento=sin_retorno", "entrega_mod_", "modulo");
+}
+
+async function renderRetornos(contenedorId, url, prefijoInput, detalleTipo, modo = "activas") {
+    const response = await fetch(url);
+    const data = await response.json().catch(() => []);
+
+    const contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+
+    contenedor.innerHTML = "";
+
+    if (!response.ok) {
+        contenedor.innerHTML = `<p style="margin:0;">Error al cargar retornos.</p>`;
+        return;
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+        const textoVacio = modo === "cerradas"
+            ? "Sin devoluciones cerradas."
+            : "Sin devoluciones activas.";
+        contenedor.innerHTML = `<p style="margin:0;">${textoVacio}</p>`;
+        return;
+    }
+
+    const modoNormalizado = String(modo || "activas").toLowerCase();
+    const cierrePorAprobacion = String(detalleTipo || "").toLowerCase() === "modulo";
+    const agrupadas = {};
+    data.forEach(item => {
+        const pendiente = Math.max(0, (parseInt(item.cantidad_solicitada, 10) || 0) - (parseInt(item.cantidad_entregada, 10) || 0));
+        const aceptado = parseInt(item.cantidad_retorno_aceptada, 10) || 0;
+        const devueltoLinea = parseInt(item.cantidad_retorno_devuelta_linea, 10) || 0;
+        const pendienteDevolverLinea = Math.max(0, aceptado - devueltoLinea);
+        const estadoGeneral = String(item.estado_general || "").trim().toLowerCase();
+        const esCerradaPorEstado = estadoGeneral === "rechazada" || estadoGeneral === "cancelada";
+        const esActiva = !esCerradaPorEstado && (cierrePorAprobacion
+            ? pendiente > 0
+            : (pendiente > 0 || pendienteDevolverLinea > 0));
+        const esCerrada = esCerradaPorEstado || !esActiva;
+
+        if (modoNormalizado === "activas" && !esActiva) return;
+        if (modoNormalizado === "cerradas" && !esCerrada) return;
+
+        const itemEnriquecido = {
+            ...item,
+            _pendiente: pendiente,
+            _aceptado: aceptado,
+            _devueltoLinea: devueltoLinea,
+            _pendienteDevolverLinea: pendienteDevolverLinea
+        };
+
+        if (!agrupadas[item.requisicion_id]) {
+            agrupadas[item.requisicion_id] = { info: item, detalles: [] };
+        }
+        agrupadas[item.requisicion_id].detalles.push(itemEnriquecido);
+    });
+
+    if (Object.keys(agrupadas).length === 0) {
+        const textoVacio = modoNormalizado === "cerradas"
+            ? "Sin devoluciones cerradas."
+            : "Sin devoluciones activas.";
+        contenedor.innerHTML = `<p style="margin:0;">${textoVacio}</p>`;
+        return;
+    }
+
+    for (const reqId in agrupadas) {
+        const req = agrupadas[reqId];
+        const div = document.createElement("div");
+        div.className = "card";
+
+        const solicitanteRol = req.info.rol_solicitante ? ` (${req.info.rol_solicitante})` : "";
+        const botonRechazar = modoNormalizado === "activas"
+            ? `<button onclick="rechazarRetorno(${reqId}, '${detalleTipo}')">Rechazar devolucion</button>`
+            : "";
+
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <h3 style="margin-top:0;">Requisicion de devolucion #${reqId}</h3>
+                ${botonRechazar}
+            </div>
+            <p><strong>Retornado por:</strong> ${req.info.nombre || "-"}${solicitanteRol}</p>
+            <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+            <p><strong>Estado:</strong> ${req.info.estado_general || "-"}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Solicitado</th>
+                        <th>Procesado</th>
+                        <th>Aceptado</th>
+                        <th>Devuelto a linea</th>
+                        <th>Pendiente</th>
+                        <th>Recibio</th>
+                        <th>Fecha recepcion</th>
+                        <th>Accion</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        req.detalles.forEach(det => {
+            const pendiente = det._pendiente;
+            const aceptado = det._aceptado;
+            const devueltoLinea = det._devueltoLinea;
+            const pendienteDevolverLinea = det._pendienteDevolverLinea;
+            const estadoGeneral = String(det.estado_general || req.info.estado_general || "").trim().toLowerCase();
+            const esRechazada = estadoGeneral === "rechazada" || estadoGeneral === "cancelada";
+            const esVistaCerrada = modoNormalizado === "cerradas";
+            const recibidoPor = det.recibido_por
+                ? `${det.recibido_por}${det.rol_recibido_por ? ` (${det.rol_recibido_por})` : ""}`
+                : "-";
+            const fechaRecibido = det.retorno_recibido_en ? new Date(det.retorno_recibido_en).toLocaleString() : "-";
+
+            let acciones = esRechazada ? "Rechazada" : "Completo";
+            if (!esRechazada && !esVistaCerrada && pendiente > 0) {
+                acciones = `
+                    <input type="number" min="1" max="${pendiente}" id="${prefijoInput}${det.detalle_id}" placeholder="Cantidad" style="width:80px; margin-bottom:6px;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button onclick="procesarRetorno(${det.detalle_id}, 'aceptar', '${detalleTipo}', '${prefijoInput}')">Aceptar devolucion</button>
+                    </div>
+                `;
+            } else if (!esRechazada && !esVistaCerrada && !cierrePorAprobacion && pendienteDevolverLinea > 0) {
+                acciones = `
+                    <input type="number" min="1" max="${pendienteDevolverLinea}" id="${prefijoInput}${det.detalle_id}" placeholder="Cantidad" style="width:80px; margin-bottom:6px;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button onclick="procesarRetorno(${det.detalle_id}, 'devolver_linea', '${detalleTipo}', '${prefijoInput}')">Devolver a linea</button>
+                    </div>
+                `;
+            }
+
+            html += `
+                <tr>
+                    <td>${det.material || "-"}</td>
+                    <td>${det.cantidad_solicitada || 0}</td>
+                    <td>${det.cantidad_entregada || 0}</td>
+                    <td>${aceptado}</td>
+                    <td>${devueltoLinea}</td>
+                    <td>${pendiente}</td>
+                    <td>${recibidoPor}</td>
+                    <td>${fechaRecibido}</td>
+                    <td>${acciones}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        div.innerHTML = html;
+        contenedor.appendChild(div);
+    }
+}
+
+async function cargarRetornos() {
+    await renderRetornos(
+        "retornos_ensamble",
+        "/requisiciones-detalle?origen=ensamble&movimiento=retorno&incluir_todas=true",
+        "ret_ens_",
+        "ensamble",
+        "activas"
+    );
+}
+
+async function cargarRetornosModulo() {
+    await renderRetornos(
+        "retornos_modulo_activos",
+        "/requisiciones-detalle?origen=modulo&movimiento=retorno&incluir_todas=true",
+        "ret_mod_",
+        "modulo",
+        "activas"
+    );
+}
+
+async function cargarDevolucionesCerradas() {
+    await Promise.all([
+        renderRetornos(
+            "retornos_cerrados_ensamble",
+            "/requisiciones-detalle?origen=ensamble&movimiento=retorno&incluir_todas=true&incluir_rechazadas=true",
+            "ret_cerr_ens_",
+            "ensamble",
+            "cerradas"
+        ),
+        renderRetornos(
+            "retornos_cerrados_modulo",
+            "/requisiciones-detalle?origen=modulo&movimiento=retorno&incluir_todas=true&incluir_rechazadas=true",
+            "ret_cerr_mod_",
+            "modulo",
+            "cerradas"
+        )
+    ]);
+    aplicarFiltroDevolucionesCerradas();
 }
 
 async function cargarRequisicionesCerradas() {
@@ -380,6 +767,83 @@ async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoI
     } else {
         cargarRequisiciones();
     }
+}
+
+async function procesarRetorno(detalle_id, accion, detalleTipo = "ensamble", prefijoInput = "ret_ens_") {
+    const input = document.getElementById(prefijoInput + detalle_id);
+    const cantidad = parseInt(input?.value, 10);
+
+    if (!cantidad || cantidad <= 0) {
+        alert("Ingrese una cantidad valida");
+        return;
+    }
+
+    const mensajeConfirmacion = accion === "aceptar"
+        ? "Estas seguro de aceptar retorno de material?"
+        : "Estas seguro de devolver el material a la linea?";
+    if (!confirm(mensajeConfirmacion)) return;
+
+    let url = "/entregar-material";
+    let payload = {
+        detalle_id,
+        cantidad_entregada: cantidad,
+        detalle_tipo: detalleTipo,
+        accion_retorno: "aceptar",
+        usuario_recibe_id: usuario?.id
+    };
+
+    if (accion === "devolver_linea") {
+        url = "/retornos-material/devolver-linea";
+        payload = {
+            detalle_id,
+            cantidad_devolver: cantidad,
+            detalle_tipo: detalleTipo,
+            usuario_recibe_id: usuario?.id
+        };
+    } else if (accion !== "aceptar") {
+        alert("Accion invalida");
+        return;
+    }
+
+    const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo procesar el retorno");
+        return;
+    }
+
+    await Promise.all([
+        cargarRetornos(),
+        cargarRetornosModulo(),
+        cargarDevolucionesCerradas()
+    ]);
+}
+
+async function rechazarRetorno(requisicion_id, detalleTipo = "ensamble") {
+    if (!confirm("Esta accion rechazara la devolucion completa. Deseas continuar?")) return;
+
+    const response = await fetch(`/retornos-material/requisiciones/${requisicion_id}/rechazar`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ detalle_tipo: detalleTipo })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo rechazar la devolucion");
+        return;
+    }
+
+    await Promise.all([
+        cargarRetornos(),
+        cargarRetornosModulo(),
+        cargarDevolucionesCerradas()
+    ]);
 }
 
 async function rechazarRequisicion(requisicion_id, detalleTipo = "ensamble") {
@@ -514,10 +978,7 @@ async function entregar(id) {
     cargarTablasEquipos();
 }
 
-cargarRequisiciones();
-cargarRequisicionesModulo();
-cargarTablasEquipos();
-cargarRequisicionesCerradas();
+mostrarConsumibles();
 
 setInterval(() => {
     if (estaEditandoFormulario()) return;

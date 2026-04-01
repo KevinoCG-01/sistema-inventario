@@ -38,12 +38,22 @@
     </style>
 </head>
 <body>
-
+<div id="menu_backdrop_tecnico" class="side-menu-backdrop" onclick="cerrarMenuLateralTecnico()"></div>
+<aside id="menu_lateral_tecnico" class="side-menu">
+<h3 class="side-menu-title">Menu</h3>
+<div class="side-menu-items">
+    <button class="side-menu-item" data-menu-tecnico="solicitar" onclick="mostrarSolicitarEquipo()">Solicitar / Devolver</button>
+    <button class="side-menu-item" data-menu-tecnico="mis_equipos" onclick="mostrarMisEquipos()">Mis Equipos</button>
+</div>
+</aside>
 <div class="container">
 
 <h2 class="iec-encabezado">Instrumentacion Equipo Control "IEC"</h2>
 <div class="panel-header">
+<div class="panel-header-left">
+<button class="menu-toggle-btn" onclick="toggleMenuLateralTecnico(event)" aria-label="Abrir menu">&#9776;</button>
 <h1 class="titulo-tecnico-pfa">Tecnico de PFA</h1>
+</div>
 <div class="logout-menu">
 <button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
 <div id="logout-dropdown" class="logout-dropdown">
@@ -53,6 +63,7 @@
 </div>
 <h2 id="bienvenida_tecnico"></h2>
 
+<div id="seccion_solicitar_equipo" class="card">
 <div id="estado_equipo" class="estado-activo"></div>
 
 <h2>Solicitar / Devolver Equipo</h2>
@@ -69,7 +80,9 @@
 <button id="btn_solicitar" onclick="procesarAccion()">Enviar</button>
 
 <hr>
+</div>
 
+<div id="seccion_mis_equipos" class="card" style="display:none;">
 <h2>Mis Equipos</h2>
 
 <table>
@@ -83,6 +96,7 @@
     </thead>
     <tbody id="tabla_asignaciones"></tbody>
 </table>
+</div>
 
 </div>
 
@@ -102,6 +116,48 @@ function toggleLogoutMenu(event){
     menu.style.display = menu.style.display === "block" ? "none" : "block";
 }
 
+function toggleMenuLateralTecnico(event){
+    if (event) event.stopPropagation();
+    const panel = document.getElementById("menu_lateral_tecnico");
+    const backdrop = document.getElementById("menu_backdrop_tecnico");
+    if (!panel || !backdrop) return;
+    const abrir = !panel.classList.contains("open");
+    panel.classList.toggle("open", abrir);
+    backdrop.classList.toggle("open", abrir);
+}
+
+function cerrarMenuLateralTecnico(){
+    const panel = document.getElementById("menu_lateral_tecnico");
+    const backdrop = document.getElementById("menu_backdrop_tecnico");
+    if (!panel || !backdrop) return;
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+}
+
+function actualizarMenuLateralTecnico(id){
+    document.querySelectorAll("#menu_lateral_tecnico .side-menu-item[data-menu-tecnico]").forEach(btn => {
+        btn.classList.toggle("activo", btn.dataset.menuTecnico === id);
+    });
+}
+
+function mostrarSolicitarEquipo() {
+    document.getElementById("seccion_solicitar_equipo").style.display = "block";
+    document.getElementById("seccion_mis_equipos").style.display = "none";
+    actualizarMenuLateralTecnico("solicitar");
+    cerrarMenuLateralTecnico();
+    cargarLineas();
+    cargarEquipos();
+    cargarAsignaciones();
+}
+
+function mostrarMisEquipos() {
+    document.getElementById("seccion_solicitar_equipo").style.display = "none";
+    document.getElementById("seccion_mis_equipos").style.display = "block";
+    actualizarMenuLateralTecnico("mis_equipos");
+    cerrarMenuLateralTecnico();
+    cargarAsignaciones();
+}
+
 function cerrarSesion(){
     localStorage.removeItem("usuario");
     localStorage.removeItem("token");
@@ -111,9 +167,18 @@ function cerrarSesion(){
 document.addEventListener("click", (e) => {
     const wrap = document.querySelector(".logout-menu");
     const menu = document.getElementById("logout-dropdown");
-    if (!wrap || !menu) return;
-    if (!wrap.contains(e.target)) {
+    if (wrap && menu && !wrap.contains(e.target)) {
         menu.style.display = "none";
+    }
+
+    const panel = document.getElementById("menu_lateral_tecnico");
+    const toggle = document.querySelector(".menu-toggle-btn");
+    if (panel && panel.classList.contains("open")) {
+        const clickEnPanel = panel.contains(e.target);
+        const clickEnToggle = !!(toggle && toggle.contains(e.target));
+        if (!clickEnPanel && !clickEnToggle) {
+            cerrarMenuLateralTecnico();
+        }
     }
 });
 const usuario = JSON.parse(localStorage.getItem("usuario"));
@@ -300,9 +365,7 @@ async function devolver(id) {
 
 /* ================= INICIO ================= */
 
-cargarLineas();
-cargarEquipos();
-cargarAsignaciones();
+mostrarSolicitarEquipo();
 
 setInterval(() => {
     if (estaEditandoFormulario()) return;

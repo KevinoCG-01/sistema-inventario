@@ -33,10 +33,26 @@
     </style>
 </head>
 <body>
+<div id="menu_backdrop_empleado" class="side-menu-backdrop" onclick="cerrarMenuLateralEmpleado()"></div>
+<aside id="menu_lateral_empleado" class="side-menu">
+<h3 class="side-menu-title">Menu</h3>
+<div class="side-menu-items">
+    <button class="side-menu-item" data-menu-empleado="crear_ensamble" onclick="irACrearRequisicion()">Crear requisicion de material de ensamble</button>
+    <button class="side-menu-item" data-menu-empleado="crear_modulo" onclick="irACrearRequisicionModulo()">Crear requisicion de material de modulo</button>
+    <button class="side-menu-item" data-menu-empleado="devolucion_ensamble" onclick="irACrearDevolucion()">Crear devolucion de material de ensamble</button>
+    <button class="side-menu-item" data-menu-empleado="devolucion_modulo" onclick="irACrearDevolucionModulo()">Crear devolucion de material de modulo</button>
+    <button class="side-menu-item" data-menu-empleado="material_ensamble" onclick="mostrarVistaEmpleado('material_ensamble')">Material de ensamble final en linea</button>
+    <button class="side-menu-item" data-menu-empleado="material_modulo" onclick="mostrarVistaEmpleado('material_modulo')">Material de modulo en linea</button>
+    <button class="side-menu-item" data-menu-empleado="requisiciones" onclick="mostrarVistaEmpleado('requisiciones')">Requisiciones enviadas</button>
+</div>
+</aside>
 <div class="container">
 <h2 class="rmi-encabezado">Requisicion de Material de Instrumentacion "RMI"</h2>
 <div class="panel-header">
-<h1>Supervisor de PFA</h1>
+<div class="panel-header-left">
+<button class="menu-toggle-btn" onclick="toggleMenuLateralEmpleado(event)" aria-label="Abrir menu">&#9776;</button>
+<h1>Produccion Final y Ensamble</h1>
+</div>
 <div class="logout-menu">
 <button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
 <div id="logout-dropdown" class="logout-dropdown">
@@ -49,25 +65,38 @@
 
 <hr>
 
+<div id="bloque_contexto_requisicion">
 <label><strong>Linea de Produccion:</strong></label><br>
 <select id="linea_select"></select>
 <br><br>
 
 <label><strong>Tipo de requisicion:</strong></label><br>
-<select id="tipo_origen">
+<input type="text" id="tipo_origen_texto" readonly>
+<select id="tipo_origen" style="display:none;">
     <option value="ensamble">Herramienta de Ajustes</option>
     <option value="modulo">Herramienta de Modulo</option>
 </select>
 <br><br>
 
-<h2>Crear Requisicion</h2>
+<div id="bloque_filtro_material_ensamble" style="display:none;">
+    <label><strong>Filtro de material (Ensamble):</strong></label><br>
+    <select id="filtro_tipo_material_ensamble">
+        <option value="consumible">Consumible</option>
+        <option value="herramienta">Herramienta</option>
+    </select>
+    <br><br>
+</div>
+</div>
+
+<div id="panel_crear_requisicion" class="card">
+<h2 id="seccion_crear_requisicion">Crear Requisicion</h2>
 
 <select id="material_select"></select>
+<small id="info_material_limite" style="display:block; margin:4px 0 10px; color:#334155;"></small>
 
 <select id="tipo_movimiento">
     <option value="nuevo">Nuevo</option>
     <option value="cambio">Cambio</option>
-    <option value="retorno">Retorno</option>
 </select>
 
 <input type="number" id="cantidad" placeholder="Cantidad">
@@ -83,20 +112,48 @@
         <tr>
             <th>Material</th>
             <th>Cantidad</th>
+            <th>Maximo</th>
             <th>Tipo</th>
             <th>Accion</th>
         </tr>
     </thead>
     <tbody id="tabla_requisicion"></tbody>
 </table>
-
-<div class="vistas-empleado">
-    <button id="btn_vista_material" class="vista-btn activo" onclick="mostrarVistaEmpleado('material')">Ver material actual en linea</button>
-    <button id="btn_vista_requisiciones" class="vista-btn" onclick="mostrarVistaEmpleado('requisiciones')">Ver requisiciones enviadas</button>
 </div>
 
-<div id="vista_material_linea">
-    <h3 class="titulo-material-linea">Material actual en la linea</h3>
+<div id="panel_crear_devolucion" class="card" style="display:none;">
+    <h2 id="seccion_crear_devolucion">Crear Devolucion de Material de Ensamble</h2>
+    <p id="descripcion_crear_devolucion" style="margin:0 0 10px; opacity:.85;">Selecciona la linea y veras materiales de ensamble con existencia actual para devolver.</p>
+
+    <label><strong>Linea de Produccion:</strong></label><br>
+    <select id="linea_devolucion_select"></select>
+    <br><br>
+
+    <select id="material_devolucion_select"></select>
+    <small id="info_material_devolucion" style="display:block; margin:4px 0 10px; color:#334155;"></small>
+
+    <input type="number" id="cantidad_devolucion" placeholder="Cantidad a devolver">
+    <div class="acciones-requisicion">
+        <button onclick="agregarMaterialDevolucion()">Agregar</button>
+        <button onclick="enviarDevolucion()">Enviar Devolucion</button>
+    </div>
+
+    <h3>Materiales en la devolucion</h3>
+    <table class="tabla-requisicion-wrap">
+        <thead>
+            <tr>
+                <th>Material</th>
+                <th>Disponible en linea</th>
+                <th>Cantidad a devolver</th>
+                <th>Accion</th>
+            </tr>
+        </thead>
+        <tbody id="tabla_devolucion"></tbody>
+    </table>
+</div>
+
+<div id="panel_material_linea" class="card" style="display:none;">
+    <h3 id="titulo_material_linea_empleado" class="titulo-material-linea">Material de ensamble final en linea</h3>
     <table class="tabla-material-linea">
         <thead>
             <tr>
@@ -109,7 +166,7 @@
     </table>
 </div>
 
-<div id="vista_requisiciones_enviadas" style="display:none;">
+<div id="panel_requisiciones_enviadas" class="card" style="display:none;">
     <h3 class="titulo-material-linea">Mis requisiciones enviadas</h3>
     <div class="filtros-requisiciones">
         <div>
@@ -143,6 +200,7 @@
                 <th>Fecha</th>
                 <th>Linea</th>
                 <th>Seccion</th>
+                <th>Tipo</th>
                 <th>Estado</th>
             </tr>
         </thead>
@@ -168,6 +226,243 @@ function toggleLogoutMenu(event){
     menu.style.display = menu.style.display === "block" ? "none" : "block";
 }
 
+function toggleMenuLateralEmpleado(event){
+    if (event) event.stopPropagation();
+    const panel = document.getElementById("menu_lateral_empleado");
+    const backdrop = document.getElementById("menu_backdrop_empleado");
+    if (!panel || !backdrop) return;
+    const abrir = !panel.classList.contains("open");
+    panel.classList.toggle("open", abrir);
+    backdrop.classList.toggle("open", abrir);
+}
+
+function cerrarMenuLateralEmpleado(){
+    const panel = document.getElementById("menu_lateral_empleado");
+    const backdrop = document.getElementById("menu_backdrop_empleado");
+    if (!panel || !backdrop) return;
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+}
+
+function actualizarMenuLateralEmpleado(id){
+    document.querySelectorAll("#menu_lateral_empleado .side-menu-item[data-menu-empleado]").forEach(btn => {
+        btn.classList.toggle("activo", btn.dataset.menuEmpleado === id);
+    });
+}
+
+function normalizarOrigen(valor){
+    return String(valor || "").toLowerCase() === "modulo" ? "modulo" : "ensamble";
+}
+
+function textoTipoRequisicion(origen){
+    return normalizarOrigen(origen) === "modulo" ? "Herramienta de Modulo" : "Herramienta de Ajustes";
+}
+
+function tituloCrearPorOrigen(origen){
+    return normalizarOrigen(origen) === "modulo"
+        ? "Crear Requisicion de Material de Modulo"
+        : "Crear Requisicion de Material de Ensamble Final";
+}
+
+function tituloMaterialPorOrigen(origen){
+    return normalizarOrigen(origen) === "modulo"
+        ? "Material de modulo en linea"
+        : "Material de ensamble final en linea";
+}
+
+function tituloDevolucionPorOrigen(origen){
+    return normalizarOrigen(origen) === "modulo"
+        ? "Crear Devolucion de Material de Modulo"
+        : "Crear Devolucion de Material de Ensamble";
+}
+
+function descripcionDevolucionPorOrigen(origen){
+    return normalizarOrigen(origen) === "modulo"
+        ? "Selecciona la linea y veras materiales de modulo con existencia actual para devolver."
+        : "Selecciona la linea y veras materiales de ensamble con existencia actual para devolver.";
+}
+
+function obtenerOpcionesTipoMovimiento(origen){
+    return [
+        { value: "nuevo", label: "Nuevo" },
+        { value: "cambio", label: "Cambio" }
+    ];
+}
+
+function obtenerFiltroTipoMaterialEnsamble(){
+    const select = document.getElementById("filtro_tipo_material_ensamble");
+    const tipo = String(select?.value || "consumible").trim().toLowerCase();
+    return tipo === "herramienta" ? "herramienta" : "consumible";
+}
+
+function sincronizarFiltroMaterialEnsamble(){
+    const bloque = document.getElementById("bloque_filtro_material_ensamble");
+    if (!bloque) return;
+    const esEnsamble = normalizarOrigen(origenCrearActivo) === "ensamble";
+    bloque.style.display = esEnsamble ? "block" : "none";
+}
+
+function sincronizarOpcionesTipoMovimiento(){
+    const select = document.getElementById("tipo_movimiento");
+    if (!select) return;
+
+    const valorActual = String(select.value || "").trim().toLowerCase();
+    const opciones = obtenerOpcionesTipoMovimiento(origenCrearActivo);
+
+    select.innerHTML = "";
+    opciones.forEach(op => {
+        const option = document.createElement("option");
+        option.value = op.value;
+        option.textContent = op.label;
+        select.appendChild(option);
+    });
+
+    if (opciones.some(op => op.value === valorActual)) {
+        select.value = valorActual;
+    } else if (opciones.length > 0) {
+        select.value = opciones[0].value;
+    }
+}
+
+function actualizarTextoTipoOrigen(origen){
+    const campoTexto = document.getElementById("tipo_origen_texto");
+    if (campoTexto) campoTexto.value = textoTipoRequisicion(origen);
+}
+
+function sincronizarVistaCrear(){
+    const selectTipo = document.getElementById("tipo_origen");
+    if (selectTipo) selectTipo.value = origenCrearActivo;
+
+    const titulo = document.getElementById("seccion_crear_requisicion");
+    if (titulo) titulo.textContent = tituloCrearPorOrigen(origenCrearActivo);
+
+    sincronizarOpcionesTipoMovimiento();
+    sincronizarFiltroMaterialEnsamble();
+    actualizarTextoTipoOrigen(origenCrearActivo);
+}
+
+function sincronizarVistaMaterial(){
+    const tituloMaterial = document.getElementById("titulo_material_linea_empleado");
+    if (tituloMaterial) tituloMaterial.textContent = tituloMaterialPorOrigen(origenMaterialActivo);
+
+    actualizarTextoTipoOrigen(origenMaterialActivo);
+}
+
+function sincronizarVistaDevolucion(){
+    const titulo = document.getElementById("seccion_crear_devolucion");
+    if (titulo) titulo.textContent = tituloDevolucionPorOrigen(origenDevolucionActivo);
+
+    const descripcion = document.getElementById("descripcion_crear_devolucion");
+    if (descripcion) descripcion.textContent = descripcionDevolucionPorOrigen(origenDevolucionActivo);
+}
+
+function validarCambioOrigenCrear(origenDestino){
+    const destino = normalizarOrigen(origenDestino);
+    if (materialesRequisicion.length > 0 && destino !== tipoOrigenActual) {
+        alert("No puedes cambiar de ensamble a modulo con una requisicion activa. Envia o elimina primero.");
+        return false;
+    }
+    return true;
+}
+
+function fijarOrigenCrear(origenDestino){
+    const destino = normalizarOrigen(origenDestino);
+    if (!validarCambioOrigenCrear(destino)) return false;
+
+    origenCrearActivo = destino;
+    tipoOrigenActual = destino;
+    sincronizarVistaCrear();
+    cargarMateriales();
+    actualizarInfoMaterialSeleccionado();
+    return true;
+}
+
+function fijarOrigenMaterial(origenDestino){
+    origenMaterialActivo = normalizarOrigen(origenDestino);
+    sincronizarVistaMaterial();
+}
+
+function fijarOrigenDevolucion(origenDestino){
+    const destino = normalizarOrigen(origenDestino);
+    const cambioOrigen = destino !== origenDevolucionActivo;
+
+    origenDevolucionActivo = destino;
+
+    if (cambioOrigen && materialesDevolucion.length > 0) {
+        materialesDevolucion = [];
+        renderizarTablaDevolucion();
+    }
+
+    const cantidadInput = document.getElementById("cantidad_devolucion");
+    if (cantidadInput) cantidadInput.value = "";
+
+    sincronizarVistaDevolucion();
+}
+
+function mostrarSeccionEmpleado(seccion){
+    if (seccion === "devolucion") {
+        seccion = "devolucion_ensamble";
+    }
+
+    const panelCrear = document.getElementById("panel_crear_requisicion");
+    const panelDevolucion = document.getElementById("panel_crear_devolucion");
+    const panelMaterial = document.getElementById("panel_material_linea");
+    const panelRequisiciones = document.getElementById("panel_requisiciones_enviadas");
+    const bloqueContexto = document.getElementById("bloque_contexto_requisicion");
+
+    const esCrear = seccion === "crear_ensamble" || seccion === "crear_modulo";
+    const esMaterial = seccion === "material_ensamble" || seccion === "material_modulo";
+    const esDevolucion = seccion === "devolucion_ensamble" || seccion === "devolucion_modulo";
+
+    if (esCrear) {
+        const origenDestino = seccion === "crear_modulo" ? "modulo" : "ensamble";
+        if (!fijarOrigenCrear(origenDestino)) return;
+    }
+
+    if (esMaterial) {
+        const origenDestino = seccion === "material_modulo" ? "modulo" : "ensamble";
+        fijarOrigenMaterial(origenDestino);
+    }
+
+    if (esDevolucion) {
+        const origenDestino = seccion === "devolucion_modulo" ? "modulo" : "ensamble";
+        fijarOrigenDevolucion(origenDestino);
+    }
+
+    if (panelCrear) panelCrear.style.display = esCrear ? "block" : "none";
+    if (panelDevolucion) panelDevolucion.style.display = esDevolucion ? "block" : "none";
+    if (panelMaterial) panelMaterial.style.display = esMaterial ? "block" : "none";
+    if (panelRequisiciones) panelRequisiciones.style.display = seccion === "requisiciones" ? "block" : "none";
+    if (bloqueContexto) bloqueContexto.style.display = (esCrear || esMaterial) ? "block" : "none";
+
+    actualizarMenuLateralEmpleado(seccion);
+    cerrarMenuLateralEmpleado();
+
+    if (esMaterial) {
+        cargarResumenMaterialLinea();
+    } else if (esDevolucion) {
+        cargarMaterialesDevolucionLinea();
+    } else if (seccion === "requisiciones") {
+        cargarRequisicionesEnviadas();
+    }
+}
+
+function irACrearRequisicion(){
+    mostrarSeccionEmpleado("crear_ensamble");
+}
+
+function irACrearRequisicionModulo(){
+    mostrarSeccionEmpleado("crear_modulo");
+}
+
+function irACrearDevolucion(){
+    mostrarSeccionEmpleado("devolucion_ensamble");
+}
+
+function irACrearDevolucionModulo(){
+    mostrarSeccionEmpleado("devolucion_modulo");
+}
+
 function cerrarSesion(){
     localStorage.removeItem("usuario");
     localStorage.removeItem("token");
@@ -180,6 +475,16 @@ document.addEventListener("click", (e) => {
     if (!wrap || !menu) return;
     if (!wrap.contains(e.target)) {
         menu.style.display = "none";
+    }
+
+    const panel = document.getElementById("menu_lateral_empleado");
+    const toggle = document.querySelector(".menu-toggle-btn");
+    if (panel && panel.classList.contains("open")) {
+        const clickEnPanel = panel.contains(e.target);
+        const clickEnToggle = !!(toggle && toggle.contains(e.target));
+        if (!clickEnPanel && !clickEnToggle) {
+            cerrarMenuLateralEmpleado();
+        }
     }
 });
 
@@ -198,8 +503,14 @@ if (usuario.rol !== "empleado") {
 document.getElementById("bienvenida").innerText = "Bienvenido " + usuario.nombre;
 const usuario_id = usuario.id;
 let materialesRequisicion = [];
-let tipoOrigenActual = document.getElementById("tipo_origen").value;
+let origenCrearActivo = "ensamble";
+let origenMaterialActivo = "ensamble";
+let origenDevolucionActivo = "ensamble";
+let tipoOrigenActual = origenCrearActivo;
 let requisicionesEnviadasCache = [];
+let catalogoMateriales = [];
+let materialesDevolucion = [];
+let catalogoMaterialesDevolucion = [];
 
 function calcularTurnoActualEmpleado() {
     const ahora = new Date();
@@ -226,49 +537,150 @@ async function cargarLineas() {
     const response = await fetch("/lineas");
     const data = await response.json();
 
-    const select = document.getElementById("linea_select");
-    const seleccionActual = select.value;
-    select.innerHTML = "";
+    const poblarLineas = (selectId) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
 
-    data.forEach(linea => {
-        const option = document.createElement("option");
-        option.value = linea.id;
-        option.textContent = linea.nombre;
-        select.appendChild(option);
-    });
+        const seleccionActual = select.value;
+        select.innerHTML = "";
 
-    if (seleccionActual) select.value = seleccionActual;
+        data.forEach(linea => {
+            const option = document.createElement("option");
+            option.value = linea.id;
+            option.textContent = linea.nombre;
+            select.appendChild(option);
+        });
+
+        if (seleccionActual && data.some(l => String(l.id) === String(seleccionActual))) {
+            select.value = seleccionActual;
+        } else if (select.options.length > 0) {
+            select.selectedIndex = 0;
+        }
+    };
+
+    poblarLineas("linea_select");
+    poblarLineas("linea_devolucion_select");
 }
 
 async function cargarMateriales() {
-    const tipoOrigen = document.getElementById("tipo_origen").value;
+    const tipoOrigen = origenCrearActivo;
 
     let data = [];
     if (tipoOrigen === "modulo") {
         const response = await fetch("/herramienta-modulo");
         data = await response.json();
     } else {
-        const response = await fetch("/materiales");
+        const tipoFiltro = obtenerFiltroTipoMaterialEnsamble();
+        const response = await fetch(`/materiales?tipo=${encodeURIComponent(tipoFiltro)}`);
         data = await response.json();
+        data = (Array.isArray(data) ? data : []).filter(mat => {
+            const tipo = String(mat?.tipo || "").trim().toLowerCase();
+            return tipo === tipoFiltro;
+        });
     }
+    catalogoMateriales = Array.isArray(data) ? data : [];
 
     const select = document.getElementById("material_select");
     const seleccionActual = select.value;
     select.innerHTML = "";
 
-    data.forEach(mat => {
+    catalogoMateriales.forEach(mat => {
+        const maximo = obtenerMaximoPorRequisicion(mat);
+        const descripcion = String(mat.descripcion || "").trim();
+        const etiqueta = tipoOrigen === "modulo"
+            ? `${mat.nombre}${descripcion ? ` - ${descripcion}` : ""} | Max: ${maximo}`
+            : `${mat.nombre} | Max: ${maximo}`;
+
         const option = document.createElement("option");
         option.value = mat.id;
-        option.textContent = `${mat.nombre}`;
+        option.textContent = etiqueta;
         select.appendChild(option);
     });
 
-    if (seleccionActual) select.value = seleccionActual;
+    if (seleccionActual && catalogoMateriales.some(mat => String(mat.id) === String(seleccionActual))) {
+        select.value = seleccionActual;
+    } else if (select.options.length > 0) {
+        select.selectedIndex = 0;
+    }
+
+    actualizarInfoMaterialSeleccionado();
+}
+
+function obtenerMaterialCatalogoPorId(materialId) {
+    return catalogoMateriales.find(m => String(m.id) === String(materialId)) || null;
+}
+
+function obtenerMaximoPorRequisicion(material) {
+    const maximo = parseInt(material?.maximo_por_requisicion, 10);
+    if (Number.isInteger(maximo) && maximo > 0) return maximo;
+    return 1;
+}
+
+function esRetornoTipo(tipoMovimiento) {
+    return String(tipoMovimiento || "").trim().toLowerCase() === "retorno";
+}
+
+function normalizarTipoMovimientoBackend(tipoMovimiento) {
+    const tipo = String(tipoMovimiento || "").trim().toLowerCase();
+    return tipo === "requisicion" ? "nuevo" : tipo;
+}
+
+function textoTipoMovimiento(tipoMovimiento) {
+    const tipo = String(tipoMovimiento || "").trim().toLowerCase();
+    if (tipo === "requisicion") return "REQUISICION";
+    return tipo.toUpperCase();
+}
+
+function calcularTotalMaterialEnRequisicion(materialId, tipoOrigen, indiceExcluir = -1, soloConLimite = false) {
+    return materialesRequisicion.reduce((acc, item, idx) => {
+        if (idx === indiceExcluir) return acc;
+        if (String(item.material_id) !== String(materialId)) return acc;
+        if (String(item.item_tipo) !== String(tipoOrigen)) return acc;
+        if (soloConLimite && esRetornoTipo(item.tipo_movimiento)) return acc;
+        return acc + (parseInt(item.cantidad, 10) || 0);
+    }, 0);
+}
+
+function actualizarInfoMaterialSeleccionado() {
+    const materialSelect = document.getElementById("material_select");
+    const info = document.getElementById("info_material_limite");
+    const inputCantidad = document.getElementById("cantidad");
+    const tipoOrigen = origenCrearActivo;
+    const tipoMovimiento = document.getElementById("tipo_movimiento")?.value || "nuevo";
+    const mat = obtenerMaterialCatalogoPorId(materialSelect?.value);
+
+    if (!mat) {
+        if (info) info.textContent = "";
+        if (inputCantidad) inputCantidad.removeAttribute("max");
+        return;
+    }
+
+    const maximo = obtenerMaximoPorRequisicion(mat);
+    const descripcion = String(mat.descripcion || "").trim();
+    const textoDescripcion = tipoOrigen === "modulo" && descripcion ? `Descripcion: ${descripcion}. ` : "";
+    const esRetorno = esRetornoTipo(tipoMovimiento);
+
+    if (info) {
+        info.textContent = esRetorno
+            ? `${textoDescripcion}Retorno: sin limite de maximo por requisicion.`
+            : `${textoDescripcion}Maximo por requisicion: ${maximo}.`;
+    }
+    if (inputCantidad) {
+        if (esRetorno) {
+            inputCantidad.removeAttribute("max");
+        } else {
+            inputCantidad.max = String(maximo);
+            const cantidadActual = parseInt(inputCantidad.value, 10);
+            if (Number.isInteger(cantidadActual) && cantidadActual > maximo) {
+                inputCantidad.value = String(maximo);
+            }
+        }
+    }
 }
 
 async function cargarResumenMaterialLinea() {
     const lineaSelect = document.getElementById("linea_select");
-    const tipoOrigen = document.getElementById("tipo_origen").value;
+    const tipoOrigen = origenMaterialActivo;
     const tabla = document.getElementById("tabla_material_linea_empleado");
 
     if (!lineaSelect || lineaSelect.selectedIndex < 0) {
@@ -293,15 +705,263 @@ async function cargarResumenMaterialLinea() {
         return;
     }
 
+    let filasHtml = "";
+    let totalFilasVisibles = 0;
+
     data.forEach(item => {
-        tabla.innerHTML += `
+        const acumuladoNuevo = parseInt(item.acumulado_nuevo, 10) || 0;
+        const cambios = parseInt(item.cambios_registrados, 10) || 0;
+        // Para "Cantidad actual" usamos el total en linea (nuevo + cambio - retorno neto).
+        const cantidadActual = Math.max(0, acumuladoNuevo + cambios);
+
+        if (cantidadActual <= 0) return;
+
+        totalFilasVisibles += 1;
+        filasHtml += `
             <tr>
                 <td>${item.material || "-"}</td>
-                <td>${item.acumulado_nuevo ?? 0}</td>
-                <td>${item.cambios_registrados ?? 0}</td>
+                <td>${cantidadActual}</td>
+                <td>${cambios}</td>
             </tr>
         `;
     });
+
+    if (totalFilasVisibles === 0) {
+        tabla.innerHTML = `<tr><td colspan="3">Sin materiales registrados para esta linea</td></tr>`;
+        return;
+    }
+
+    tabla.innerHTML = filasHtml;
+}
+
+function obtenerMaterialDevolucionPorId(materialId) {
+    return catalogoMaterialesDevolucion.find(m => String(m.material_id) === String(materialId)) || null;
+}
+
+function totalDevolucionCapturada(materialId, indiceExcluir = -1) {
+    return materialesDevolucion.reduce((acc, item, idx) => {
+        if (idx === indiceExcluir) return acc;
+        if (String(item.material_id) !== String(materialId)) return acc;
+        return acc + (parseInt(item.cantidad, 10) || 0);
+    }, 0);
+}
+
+function actualizarInfoMaterialDevolucion() {
+    const select = document.getElementById("material_devolucion_select");
+    const info = document.getElementById("info_material_devolucion");
+    const inputCantidad = document.getElementById("cantidad_devolucion");
+    const mat = obtenerMaterialDevolucionPorId(select?.value);
+
+    if (!mat) {
+        if (info) info.textContent = "No hay material disponible para devolucion en esta linea.";
+        if (inputCantidad) inputCantidad.removeAttribute("max");
+        return;
+    }
+
+    const disponibleTotal = Math.max(0, parseInt(mat.cantidad_en_linea, 10) || 0);
+    const capturado = totalDevolucionCapturada(mat.material_id);
+    const restante = Math.max(0, disponibleTotal - capturado);
+
+    if (info) info.textContent = `Disponible en linea para devolver: ${restante} (total en linea: ${disponibleTotal}).`;
+    if (inputCantidad) {
+        inputCantidad.max = String(restante);
+        const actual = parseInt(inputCantidad.value, 10);
+        if (Number.isInteger(actual) && actual > restante) {
+            inputCantidad.value = String(restante);
+        }
+    }
+}
+
+async function cargarMaterialesDevolucionLinea() {
+    const lineaSelect = document.getElementById("linea_devolucion_select");
+    const materialSelect = document.getElementById("material_devolucion_select");
+    const info = document.getElementById("info_material_devolucion");
+
+    if (!materialSelect || !lineaSelect) return;
+
+    const lineaId = parseInt(lineaSelect.value, 10);
+    if (!Number.isInteger(lineaId) || lineaId <= 0) {
+        catalogoMaterialesDevolucion = [];
+        materialSelect.innerHTML = "";
+        if (info) info.textContent = "Selecciona una linea para ver materiales disponibles.";
+        return;
+    }
+
+    const response = await fetch(`/materiales-retorno-por-linea?linea_id=${lineaId}&seccion=${encodeURIComponent(origenDevolucionActivo)}`);
+    const data = await response.json().catch(() => []);
+
+    if (!response.ok) {
+        catalogoMaterialesDevolucion = [];
+        materialSelect.innerHTML = "";
+        if (info) info.textContent = "No se pudo cargar material para devolucion.";
+        return;
+    }
+
+    catalogoMaterialesDevolucion = Array.isArray(data) ? data : [];
+    const seleccionActual = materialSelect.value;
+    materialSelect.innerHTML = "";
+
+    catalogoMaterialesDevolucion.forEach(item => {
+        const disponible = Math.max(0, parseInt(item.cantidad_en_linea, 10) || 0);
+        const option = document.createElement("option");
+        option.value = item.material_id;
+        option.textContent = `${item.material} | En linea: ${disponible}`;
+        materialSelect.appendChild(option);
+    });
+
+    if (seleccionActual && catalogoMaterialesDevolucion.some(m => String(m.material_id) === String(seleccionActual))) {
+        materialSelect.value = seleccionActual;
+    } else if (materialSelect.options.length > 0) {
+        materialSelect.selectedIndex = 0;
+    }
+
+    actualizarInfoMaterialDevolucion();
+}
+
+function cambiarLineaDevolucion() {
+    materialesDevolucion = [];
+    renderizarTablaDevolucion();
+    cargarMaterialesDevolucionLinea();
+}
+
+function renderizarTablaDevolucion() {
+    const tabla = document.getElementById("tabla_devolucion");
+    if (!tabla) return;
+
+    tabla.innerHTML = "";
+
+    materialesDevolucion.forEach((item, index) => {
+        const fila = document.createElement("tr");
+        fila.innerHTML = `
+            <td>${item.nombre}</td>
+            <td>${item.disponible_en_linea}</td>
+            <td>${item.cantidad}</td>
+            <td>
+                <div class="acciones-tabla">
+                    <button class="btn-editar" onclick="editarMaterialDevolucion(${index})">Editar</button>
+                    <button class="btn-eliminar" onclick="eliminarMaterialDevolucion(${index})">Eliminar</button>
+                </div>
+            </td>
+        `;
+        tabla.appendChild(fila);
+    });
+}
+
+function agregarMaterialDevolucion() {
+    const materialSelect = document.getElementById("material_devolucion_select");
+    const cantidadInput = document.getElementById("cantidad_devolucion");
+
+    const materialId = materialSelect?.value;
+    const cantidad = parseInt(cantidadInput?.value, 10);
+    const material = obtenerMaterialDevolucionPorId(materialId);
+
+    if (!material) {
+        alert("Selecciona un material valido para devolver.");
+        return;
+    }
+    if (!cantidad || cantidad <= 0) {
+        alert("Ingresa una cantidad valida.");
+        return;
+    }
+
+    const disponibleTotal = Math.max(0, parseInt(material.cantidad_en_linea, 10) || 0);
+    const totalActual = totalDevolucionCapturada(materialId);
+    if ((totalActual + cantidad) > disponibleTotal) {
+        alert(`No puedes devolver mas de ${disponibleTotal} para este material en la linea.`);
+        return;
+    }
+
+    const existente = materialesDevolucion.find(m => String(m.material_id) === String(materialId));
+    if (existente) {
+        existente.cantidad += cantidad;
+    } else {
+        materialesDevolucion.push({
+            material_id: material.material_id,
+            nombre: material.material,
+            cantidad,
+            disponible_en_linea: disponibleTotal
+        });
+    }
+
+    if (cantidadInput) cantidadInput.value = "";
+    renderizarTablaDevolucion();
+    actualizarInfoMaterialDevolucion();
+}
+
+function editarMaterialDevolucion(index) {
+    const item = materialesDevolucion[index];
+    if (!item) return;
+
+    const texto = prompt("Editar cantidad a devolver:", String(item.cantidad));
+    if (texto === null) return;
+
+    const nuevaCantidad = parseInt(String(texto).trim(), 10);
+    if (!nuevaCantidad || nuevaCantidad <= 0) {
+        alert("Cantidad invalida.");
+        return;
+    }
+
+    const totalOtros = totalDevolucionCapturada(item.material_id, index);
+    if ((totalOtros + nuevaCantidad) > item.disponible_en_linea) {
+        alert(`No puedes devolver mas de ${item.disponible_en_linea} para este material en la linea.`);
+        return;
+    }
+
+    item.cantidad = nuevaCantidad;
+    renderizarTablaDevolucion();
+    actualizarInfoMaterialDevolucion();
+}
+
+function eliminarMaterialDevolucion(index) {
+    materialesDevolucion.splice(index, 1);
+    renderizarTablaDevolucion();
+    actualizarInfoMaterialDevolucion();
+}
+
+async function enviarDevolucion() {
+    if (materialesDevolucion.length === 0) {
+        alert("Debes agregar al menos un material para devolucion.");
+        return;
+    }
+
+    const lineaId = parseInt(document.getElementById("linea_devolucion_select")?.value, 10);
+    if (!Number.isInteger(lineaId) || lineaId <= 0) {
+        alert("Selecciona una linea valida.");
+        return;
+    }
+
+    const confirmar = confirm("Esta seguro que desea enviar esta devolucion?");
+    if (!confirmar) return;
+
+    const turno = actualizarTurnoActualEmpleado();
+    const response = await fetch("/requisiciones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            usuario_id,
+            linea_id: lineaId,
+            tipo_origen: origenDevolucionActivo,
+            turno,
+            materiales: materialesDevolucion.map(item => ({
+                material_id: item.material_id,
+                cantidad: item.cantidad,
+                tipo_movimiento: "retorno",
+                item_tipo: origenDevolucionActivo
+            }))
+        })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo enviar la devolucion");
+        return;
+    }
+
+    alert("Devolucion enviada correctamente");
+    materialesDevolucion = [];
+    renderizarTablaDevolucion();
+    await cargarMaterialesDevolucionLinea();
+    cargarRequisicionesEnviadas();
 }
 
 function formatearEstadoRequisicion(estado){
@@ -317,26 +977,41 @@ function formatearEstadoRequisicion(estado){
 }
 
 function mostrarVistaEmpleado(vista){
-    const vistaMaterial = document.getElementById("vista_material_linea");
-    const vistaReq = document.getElementById("vista_requisiciones_enviadas");
-    const btnMat = document.getElementById("btn_vista_material");
-    const btnReq = document.getElementById("btn_vista_requisiciones");
-
     if(vista === "requisiciones"){
-        vistaMaterial.style.display = "none";
-        vistaReq.style.display = "block";
-        btnMat.classList.remove("activo");
-        btnReq.classList.add("activo");
-        cargarRequisicionesEnviadas();
+        mostrarSeccionEmpleado("requisiciones");
         return;
     }
+    if(vista === "devolucion" || vista === "devolucion_ensamble"){
+        mostrarSeccionEmpleado("devolucion_ensamble");
+        return;
+    }
+    if(vista === "devolucion_modulo"){
+        mostrarSeccionEmpleado("devolucion_modulo");
+        return;
+    }
+    if(vista === "material_modulo"){
+        mostrarSeccionEmpleado("material_modulo");
+        return;
+    }
+    if(vista === "material" || vista === "material_ensamble"){
+        mostrarSeccionEmpleado("material_ensamble");
+        return;
+    }
+    if(vista === "crear_modulo"){
+        mostrarSeccionEmpleado("crear_modulo");
+        return;
+    }
+    mostrarSeccionEmpleado("crear_ensamble");
+}
 
-    vistaMaterial.style.display = "block";
-    vistaReq.style.display = "none";
-    btnMat.classList.add("activo");
-    btnReq.classList.remove("activo");
-    cargarResumenMaterialLinea();
-    cargarRequisicionesEnviadas();
+function estaSeccionVisible(id){
+    const el = document.getElementById(id);
+    return !!el && el.style.display !== "none";
+}
+
+async function refrescarRequisicionesEnviadasPorSeleccion(){
+    if (!estaSeccionVisible("panel_requisiciones_enviadas")) return;
+    await cargarRequisicionesEnviadas();
 }
 
 async function cargarRequisicionesEnviadas(){
@@ -347,14 +1022,14 @@ async function cargarRequisicionesEnviadas(){
     const data = await response.json().catch(() => []);
 
     if(!response.ok){
-        tabla.innerHTML = `<tr><td colspan="5">Error al cargar requisiciones</td></tr>`;
+        tabla.innerHTML = `<tr><td colspan="6">Error al cargar requisiciones</td></tr>`;
         return;
     }
 
     if(!Array.isArray(data) || data.length === 0){
         requisicionesEnviadasCache = [];
         poblarFiltroLineasRequisiciones();
-        tabla.innerHTML = `<tr><td colspan="5">No has enviado requisiciones</td></tr>`;
+        tabla.innerHTML = `<tr><td colspan="6">No has enviado requisiciones</td></tr>`;
         return;
     }
 
@@ -414,17 +1089,21 @@ function renderRequisicionesEnviadasFiltradas(){
     tabla.innerHTML = "";
 
     if (filtradas.length === 0) {
-        tabla.innerHTML = `<tr><td colspan="5">Sin resultados con ese filtro</td></tr>`;
+        tabla.innerHTML = `<tr><td colspan="6">Sin resultados con ese filtro</td></tr>`;
         return;
     }
 
     filtradas.forEach(r => {
+        const tipoHistorial = String(r.tipo_historial || "requisicion").toLowerCase() === "devolucion"
+            ? "Devolucion"
+            : "Requisicion";
         tabla.innerHTML += `
             <tr>
                 <td>${r.id}</td>
                 <td>${r.fecha ? new Date(r.fecha).toLocaleString() : "-"}</td>
                 <td>${r.linea || "-"}</td>
                 <td>${r.tipo_origen || "-"}</td>
+                <td>${tipoHistorial}</td>
                 <td>${formatearEstadoRequisicion(r.estado_general)}</td>
             </tr>
         `;
@@ -435,11 +1114,16 @@ function renderizarTabla() {
     tabla.innerHTML = "";
 
     materialesRequisicion.forEach((item, index) => {
+        const maximoCol = esRetornoTipo(item.tipo_movimiento)
+            ? "Sin limite (retorno)"
+            : (item.maximo_por_requisicion || 1);
+
         const fila = document.createElement("tr");
         fila.innerHTML = `
             <td>${item.nombre}</td>
             <td>${item.cantidad}</td>
-            <td>${item.tipo_movimiento.toUpperCase()}</td>
+            <td>${maximoCol}</td>
+            <td>${textoTipoMovimiento(item.tipo_movimiento)}</td>
             <td><div class="acciones-tabla"><button class="btn-editar" onclick="editarMaterial(${index})">Editar</button><button class="btn-eliminar" onclick="eliminarMaterial(${index})">Eliminar</button></div></td>
         `;
         tabla.appendChild(fila);
@@ -447,11 +1131,11 @@ function renderizarTabla() {
 }
 
 function agregarMaterial() {
-    const tipoOrigen = document.getElementById("tipo_origen").value;
+    const tipoOrigen = origenCrearActivo;
 
     if (materialesRequisicion.length > 0 && tipoOrigen !== tipoOrigenActual) {
         alert("No puedes mezclar ensamble y modulo en la misma requisicion. Envia o elimina primero.");
-        document.getElementById("tipo_origen").value = tipoOrigenActual;
+        sincronizarVistaCrear();
         return;
     }
 
@@ -459,15 +1143,42 @@ function agregarMaterial() {
 
     const materialSelect = document.getElementById("material_select");
     const material_id = materialSelect.value;
-    const nombreMaterial = materialSelect.options[materialSelect.selectedIndex]?.text || "";
+    const materialSeleccionado = obtenerMaterialCatalogoPorId(material_id);
 
     const cantidad = parseInt(document.getElementById("cantidad").value, 10);
-    const tipoMovimiento = document.getElementById("tipo_movimiento").value;
+    const tipoMovimiento = String(document.getElementById("tipo_movimiento").value || "").trim().toLowerCase();
 
     if (!cantidad || cantidad <= 0) {
         alert("Ingrese una cantidad valida");
         return;
     }
+    if (!materialSeleccionado) {
+        alert("Selecciona un material valido");
+        return;
+    }
+    const tiposPermitidosCrear = obtenerOpcionesTipoMovimiento(tipoOrigen).map(op => op.value);
+    if (!tiposPermitidosCrear.includes(tipoMovimiento)) {
+        alert(`Tipo invalido. Opciones permitidas: ${tiposPermitidosCrear.join(", ")}`);
+        return;
+    }
+
+    const maximoPorRequisicion = obtenerMaximoPorRequisicion(materialSeleccionado);
+    const esRetorno = esRetornoTipo(tipoMovimiento);
+    if (!esRetorno) {
+        const totalActual = calcularTotalMaterialEnRequisicion(material_id, tipoOrigen, -1, true);
+        const totalNuevo = totalActual + cantidad;
+
+        if (totalNuevo > maximoPorRequisicion) {
+            alert(`No puedes solicitar mas de ${maximoPorRequisicion} de este material en la misma requisicion.`);
+            return;
+        }
+    }
+
+    const descripcion = String(materialSeleccionado.descripcion || "").trim();
+    const nombreBase = String(materialSeleccionado.nombre || "").trim() || (materialSelect.options[materialSelect.selectedIndex]?.text || "");
+    const nombreMaterial = tipoOrigen === "modulo" && descripcion
+        ? `${nombreBase} - ${descripcion}`
+        : nombreBase;
 
     const existente = materialesRequisicion.find(item =>
         item.material_id === material_id &&
@@ -477,25 +1188,33 @@ function agregarMaterial() {
 
     if (existente) {
         existente.cantidad += cantidad;
+        existente.maximo_por_requisicion = maximoPorRequisicion;
     } else {
         materialesRequisicion.push({
             material_id,
             nombre: nombreMaterial,
             cantidad,
             tipo_movimiento: tipoMovimiento,
-            item_tipo: tipoOrigen
+            item_tipo: tipoOrigen,
+            maximo_por_requisicion: maximoPorRequisicion
         });
     }
 
     renderizarTabla();
     cargarRequisicionesEnviadas();
     document.getElementById("cantidad").value = "";
+    actualizarInfoMaterialSeleccionado();
 }
 
 
 function editarMaterial(index) {
     const item = materialesRequisicion[index];
     if (!item) return;
+
+    const materialSeleccionado = obtenerMaterialCatalogoPorId(item.material_id);
+    const maximoPorRequisicion = materialSeleccionado
+        ? obtenerMaximoPorRequisicion(materialSeleccionado)
+        : Math.max(parseInt(item.maximo_por_requisicion, 10) || 1, 1);
 
     const cantidadTexto = prompt("Editar cantidad:", String(item.cantidad));
     if (cantidadTexto === null) return;
@@ -506,17 +1225,28 @@ function editarMaterial(index) {
         return;
     }
 
-    const tipoTexto = prompt("Editar tipo (nuevo/cambio/retorno):", String(item.tipo_movimiento || "nuevo"));
+    const tiposPermitidosEdicion = obtenerOpcionesTipoMovimiento(item.item_tipo).map(op => op.value);
+    const etiquetaTipos = tiposPermitidosEdicion.join("/");
+    const tipoTexto = prompt(`Editar tipo (${etiquetaTipos}):`, String(item.tipo_movimiento || tiposPermitidosEdicion[0] || "nuevo"));
     if (tipoTexto === null) return;
 
     const tipo = String(tipoTexto).trim().toLowerCase();
-    if (!["nuevo", "cambio", "retorno"].includes(tipo)) {
-        alert("Tipo invalido. Use: nuevo, cambio o retorno");
+    if (!tiposPermitidosEdicion.includes(tipo)) {
+        alert(`Tipo invalido. Opciones permitidas: ${tiposPermitidosEdicion.join(", ")}`);
         return;
+    }
+
+    if (!esRetornoTipo(tipo)) {
+        const totalOtros = calcularTotalMaterialEnRequisicion(item.material_id, item.item_tipo, index, true);
+        if ((totalOtros + cantidad) > maximoPorRequisicion) {
+            alert(`No puedes solicitar mas de ${maximoPorRequisicion} de este material en la misma requisicion.`);
+            return;
+        }
     }
 
     item.cantidad = cantidad;
     item.tipo_movimiento = tipo;
+    item.maximo_por_requisicion = maximoPorRequisicion;
 
     const fusion = [];
     materialesRequisicion.forEach((m) => {
@@ -527,6 +1257,7 @@ function editarMaterial(index) {
         );
         if (existente) {
             existente.cantidad += Number(m.cantidad) || 0;
+            existente.maximo_por_requisicion = Number(m.maximo_por_requisicion) || Number(existente.maximo_por_requisicion) || 1;
         } else {
             fusion.push({ ...m });
         }
@@ -535,11 +1266,12 @@ function editarMaterial(index) {
 
     renderizarTabla();
     cargarRequisicionesEnviadas();
+    actualizarInfoMaterialSeleccionado();
 }
 function eliminarMaterial(index) {
     materialesRequisicion.splice(index, 1);
     if (materialesRequisicion.length === 0) {
-        tipoOrigenActual = document.getElementById("tipo_origen").value;
+        tipoOrigenActual = origenCrearActivo;
     }
     renderizarTabla();
     cargarRequisicionesEnviadas();
@@ -560,7 +1292,7 @@ async function enviarRequisicion() {
     const confirmar = confirm("Esta seguro que desea enviar esta requisicion?");
     if (!confirmar) return;
 
-    const tipo_origen = document.getElementById("tipo_origen").value;
+    const tipo_origen = origenCrearActivo;
     const turno = actualizarTurnoActualEmpleado();
 
     const response = await fetch("/requisiciones", {
@@ -571,7 +1303,10 @@ async function enviarRequisicion() {
             linea_id,
             tipo_origen,
             turno,
-            materiales: materialesRequisicion
+            materiales: materialesRequisicion.map(item => ({
+                ...item,
+                tipo_movimiento: normalizarTipoMovimientoBackend(item.tipo_movimiento)
+            }))
         })
     });
 
@@ -583,35 +1318,43 @@ async function enviarRequisicion() {
 
     alert("Requisicion enviada correctamente");
     materialesRequisicion = [];
-    tipoOrigenActual = document.getElementById("tipo_origen").value;
+    tipoOrigenActual = origenCrearActivo;
     renderizarTabla();
     cargarRequisicionesEnviadas();
 }
 
 function cambiarTipoOrigen() {
-    const nuevoTipo = document.getElementById("tipo_origen").value;
+    const selectTipo = document.getElementById("tipo_origen");
+    if (!selectTipo) return;
+    const nuevoTipo = normalizarOrigen(selectTipo.value);
 
-    if (materialesRequisicion.length > 0 && nuevoTipo !== tipoOrigenActual) {
-        alert("No puedes cambiar tipo con una requisicion activa. Envia o elimina primero.");
-        document.getElementById("tipo_origen").value = tipoOrigenActual;
-        return;
+    if (!fijarOrigenCrear(nuevoTipo)) {
+        selectTipo.value = origenCrearActivo;
     }
-
-    tipoOrigenActual = nuevoTipo;
-    cargarMateriales();
-    cargarResumenMaterialLinea();
-    cargarRequisicionesEnviadas();
 }
 
 cargarLineas();
+sincronizarVistaCrear();
+sincronizarVistaMaterial();
+sincronizarVistaDevolucion();
 cargarMateriales();
 document.getElementById("linea_select").addEventListener("change", cargarResumenMaterialLinea);
-document.getElementById("tipo_origen").addEventListener("change", cambiarTipoOrigen);
-document.getElementById("filtro_req_linea")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
-document.getElementById("filtro_req_estado")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
-document.getElementById("filtro_req_fecha_desde")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
-document.getElementById("filtro_req_fecha_hasta")?.addEventListener("change", renderRequisicionesEnviadasFiltradas);
-mostrarVistaEmpleado("material");
+document.getElementById("linea_devolucion_select").addEventListener("change", cambiarLineaDevolucion);
+document.getElementById("material_select").addEventListener("change", actualizarInfoMaterialSeleccionado);
+document.getElementById("tipo_movimiento").addEventListener("change", actualizarInfoMaterialSeleccionado);
+document.getElementById("filtro_tipo_material_ensamble")?.addEventListener("change", () => {
+    if (normalizarOrigen(origenCrearActivo) !== "ensamble") return;
+    cargarMateriales();
+    actualizarInfoMaterialSeleccionado();
+});
+document.getElementById("material_devolucion_select").addEventListener("change", actualizarInfoMaterialDevolucion);
+document.getElementById("filtro_req_linea")?.addEventListener("change", refrescarRequisicionesEnviadasPorSeleccion);
+document.getElementById("filtro_req_estado")?.addEventListener("change", refrescarRequisicionesEnviadasPorSeleccion);
+document.getElementById("filtro_req_fecha_desde")?.addEventListener("change", refrescarRequisicionesEnviadasPorSeleccion);
+document.getElementById("filtro_req_fecha_hasta")?.addEventListener("change", refrescarRequisicionesEnviadasPorSeleccion);
+document.getElementById("filtro_req_fecha_desde")?.addEventListener("input", refrescarRequisicionesEnviadasPorSeleccion);
+document.getElementById("filtro_req_fecha_hasta")?.addEventListener("input", refrescarRequisicionesEnviadasPorSeleccion);
+irACrearRequisicion();
 cargarResumenMaterialLinea();
 actualizarTurnoActualEmpleado();
 
@@ -620,6 +1363,9 @@ setInterval(() => {
     actualizarTurnoActualEmpleado();
     cargarLineas();
     cargarMateriales();
+    if (estaSeccionVisible("panel_crear_devolucion")) {
+        cargarMaterialesDevolucionLinea();
+    }
     cargarResumenMaterialLinea();
     cargarRequisicionesEnviadas();
 }, 5000);
@@ -627,31 +1373,6 @@ setInterval(() => {
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

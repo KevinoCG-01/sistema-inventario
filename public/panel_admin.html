@@ -42,6 +42,38 @@ h1 {
     letter-spacing: 0.2px;
 }
 
+.admin-layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.sidebar-admin {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 52px);
+    overflow: auto;
+    background: linear-gradient(180deg, #334155 0%, #243447 100%);
+    border: 1px solid #2d3b50;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 10px 24px rgba(2, 8, 23, 0.18);
+}
+
+.sidebar-titulo {
+    margin: 2px 4px 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #cbd5e1;
+    font-weight: 800;
+}
+
+.admin-main {
+    min-width: 0;
+}
+
 .seccion {
     display: none;
     margin-top: 18px;
@@ -56,13 +88,9 @@ h1 {
 
 .menu-botones {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-
-.menu-botones button {
-    margin-right: 0;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 0;
 }
 
 button {
@@ -82,6 +110,28 @@ button:hover {
 
 button:active {
     transform: translateY(1px);
+}
+
+.sidebar-admin .menu-botones button {
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    font-weight: 700;
+}
+
+.sidebar-admin .menu-botones button:hover {
+    filter: none;
+    background: rgba(148, 163, 184, 0.34);
+}
+
+.sidebar-admin .menu-botones button.activo {
+    border-color: transparent;
+    background: linear-gradient(135deg, #2dd4bf, #14b8a6);
+    color: #073b4c;
 }
 
 input, select, textarea {
@@ -127,14 +177,53 @@ tbody tr:hover {
     color: #c62828;
     font-weight: bold;
 }
+
+@media (max-width: 980px) {
+    .admin-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sidebar-admin {
+        position: static;
+        max-height: none;
+    }
+
+    .menu-botones {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+    }
+
+    .sidebar-admin .menu-botones button {
+        text-align: center;
+    }
+}
 </style>
 </head>
 
 <body>
+<div id="menu_backdrop_admin" class="side-menu-backdrop" onclick="cerrarMenuLateralAdmin()"></div>
+<aside id="menu_lateral_admin" class="side-menu">
+<h3 class="side-menu-title">Menu</h3>
+<div class="side-menu-items">
+<button class="side-menu-item" data-seccion="lineas" onclick="mostrarSeccion('lineas')">Lineas</button>
+<button class="side-menu-item" data-seccion="materiales" onclick="mostrarSeccion('materiales')">Materiales Ensamble</button>
+<button class="side-menu-item" data-seccion="herramienta_modulo" onclick="mostrarSeccion('herramienta_modulo')">Herramienta de modulo</button>
+<button class="side-menu-item" data-seccion="equipos" onclick="mostrarSeccion('equipos')">Equipos</button>
+<button class="side-menu-item" data-seccion="solicitudes" onclick="mostrarSeccion('solicitudes')">Solicitudes</button>
+<button class="side-menu-item" data-seccion="material_lineas" onclick="mostrarSeccion('material_lineas')">Material por Linea</button>
+<button class="side-menu-item" data-seccion="usuarios" onclick="abrirUsuarios()">Usuarios</button>
+<button class="side-menu-item" data-seccion="horarios" onclick="mostrarSeccion('horarios')">Control Horarios</button>
+<button class="side-menu-item" data-seccion="exportar" onclick="mostrarSeccion('exportar')">Exportar</button>
+</div>
+</aside>
 <div class="container">
 
 <div class="panel-header">
-<h1>Panel Administrador</h1>
+<div class="panel-header-left">
+<button class="menu-toggle-btn" onclick="toggleMenuLateralAdmin(event)" aria-label="Abrir menu">&#9776;</button>
+<h1>Control Principal y Administracion</h1>
+</div>
 <div class="logout-menu">
 <button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
 <div id="logout-dropdown" class="logout-dropdown">
@@ -143,18 +232,6 @@ tbody tr:hover {
 </div>
 </div>
 <h2 id="bienvenida_admin"></h2>
-
-<div class="menu-botones">
-<button onclick="mostrarSeccion('lineas')">Lineas</button>
-<button onclick="mostrarSeccion('materiales')">Materiales Ensamble</button>
-<button onclick="mostrarSeccion('herramienta_modulo')">Herramienta de modulo</button>
-<button onclick="mostrarSeccion('equipos')">Equipos</button>
-<button onclick="mostrarSeccion('solicitudes')">Solicitudes</button>
-<button onclick="mostrarSeccion('material_lineas')">Material por Linea</button>
-<button onclick="abrirUsuarios()">Usuarios</button>
-<button onclick="mostrarSeccion('horarios')">Control Horarios</button>
-<button onclick="mostrarSeccion('exportar')">Exportar</button>
-</div>
 
 <!-- ================= LINEAS ================= -->
 <div id="lineas" class="seccion activo">
@@ -191,6 +268,7 @@ tbody tr:hover {
 
 <input type="number" id="cantidad_stock" placeholder="Cantidad en Stock"><br><br>
 <input type="number" id="stock_minimo" placeholder="Stock Minimo"><br><br>
+<input type="number" id="maximo_por_requisicion" min="1" value="1" placeholder="Maximo por requisicion"><br><br>
 <input type="number" id="precio_unitario" step="0.01" min="0" placeholder="Precio unitario"><br><br>
 
 <button onclick="agregarMaterial()">Agregar Material</button>
@@ -198,17 +276,27 @@ tbody tr:hover {
 <hr>
 
 <!-- ðŸ”Ž BUSCADOR -->
+<div style="display:flex; gap:10px; align-items:center; flex-wrap:nowrap; margin-bottom:15px;">
 <input type="text" 
 id="buscar_material"
 placeholder="Buscar material por nombre"
 onkeyup="buscarMaterial()"
-style="margin-bottom:15px; padding:8px; width:300px;">
+style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
+<select
+id="filtro_stock_material"
+onchange="buscarMaterial()"
+style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
+    <option value="todos">Todos los materiales</option>
+    <option value="bajo_stock">Solo bajo stock</option>
+</select>
+</div>
 
 <table>
 <thead>
 <tr>
 <th>Nombre</th>
 <th>Stock</th>
+<th>Max x Requisicion</th>
 <th>Precio Unitario</th>
 <th>Total</th>
 <th>Agregar</th>
@@ -224,23 +312,37 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 <div id="herramienta_modulo" class="seccion">
 <h2>Gestion de Herramienta de Modulo</h2>
 <input type="text" id="nombre_herramienta_modulo" placeholder="Nombre"><br><br>
-<input type="text" id="descripcion_herramienta_modulo" placeholder="Descripcion"><br><br>
+<select id="descripcion_herramienta_modulo">
+    <option value="consumible">Consumible</option>
+    <option value="herramienta" selected>Herramienta</option>
+</select><br><br>
 <input type="number" id="cantidad_herramienta_modulo" placeholder="Cantidad"><br><br>
 <input type="number" id="stock_minimo_herramienta_modulo" placeholder="Stock minimo"><br><br>
+<input type="number" id="maximo_por_requisicion_herramienta_modulo" min="1" value="1" placeholder="Maximo por requisicion"><br><br>
 <input type="number" id="precio_herramienta_modulo" step="0.01" placeholder="Precio por unidad"><br><br>
 <button onclick="agregarHerramientaModulo()">Agregar Herramienta</button>
 <hr>
+<div style="display:flex; gap:10px; align-items:center; flex-wrap:nowrap; margin-bottom:15px;">
 <input type="text"
 id="buscar_herramienta_modulo"
 placeholder="Buscar herramienta por nombre"
 onkeyup="buscarHerramientaModulo()"
-style="margin-bottom:15px; padding:8px; width:300px;">
+style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
+<select
+id="filtro_stock_herramienta_modulo"
+onchange="buscarHerramientaModulo()"
+style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
+    <option value="todos">Todas las herramientas</option>
+    <option value="bajo_stock">Solo bajo stock</option>
+</select>
+</div>
 <table>
 <thead>
 <tr>
 <th>Nombre</th>
 <th>Descripcion</th>
 <th>Stock</th>
+<th>Max x Requisicion</th>
 <th>Precio Unitario</th>
 <th>Total</th>
 <th>Agregar</th>
@@ -493,8 +595,21 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 
         <button style="margin-top:10px;" onclick="exportarRequisicionesModulo()">Exportar a Excel</button>
     </div>
+
+    <div class="card" style="padding:14px;">
+        <h3 style="margin:0 0 10px 0;">Devoluciones</h3>
+
+        <label>Desde:</label>
+        <input type="date" id="fecha_inicio_devoluciones">
+
+        <label>Hasta:</label>
+        <input type="date" id="fecha_fin_devoluciones">
+
+        <button style="margin-top:10px;" onclick="exportarDevoluciones()">Exportar devoluciones</button>
+    </div>
 </div>
 
+</div>
 </div>
 
 <script>
@@ -506,9 +621,35 @@ function estaEditandoFormulario(){
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+function actualizarMenuLateralAdmin(id){
+document.querySelectorAll("#menu_lateral_admin .side-menu-item[data-seccion]").forEach(btn => {
+    btn.classList.toggle("activo", btn.dataset.seccion === id);
+});
+}
+
+function toggleMenuLateralAdmin(event){
+if (event) event.stopPropagation();
+const panel = document.getElementById("menu_lateral_admin");
+const backdrop = document.getElementById("menu_backdrop_admin");
+if (!panel || !backdrop) return;
+const abrir = !panel.classList.contains("open");
+panel.classList.toggle("open", abrir);
+backdrop.classList.toggle("open", abrir);
+}
+
+function cerrarMenuLateralAdmin(){
+const panel = document.getElementById("menu_lateral_admin");
+const backdrop = document.getElementById("menu_backdrop_admin");
+if (!panel || !backdrop) return;
+panel.classList.remove("open");
+backdrop.classList.remove("open");
+}
+
 function mostrarSeccion(id){
 document.querySelectorAll(".seccion").forEach(s=>s.classList.remove("activo"));
 document.getElementById(id).classList.add("activo");
+actualizarMenuLateralAdmin(id);
+cerrarMenuLateralAdmin();
 
 if (id === "lineas") {
     cargarLineas();
@@ -676,17 +817,23 @@ const url = busqueda
 
 const res = await fetch(url);
 const data = await res.json();
+const filtroStock = document.getElementById("filtro_stock_material")?.value || "todos";
+const materiales = data.filter(m => {
+    if (filtroStock !== "bajo_stock") return true;
+    return Number(m.cantidad_stock || 0) <= Number(m.stock_minimo || 0);
+});
 
 const tabla = document.getElementById("tabla_materiales");
 tabla.innerHTML = "";
 
-data.forEach(m => {
+materiales.forEach(m => {
 
 let clase = m.cantidad_stock <= m.stock_minimo ? "alerta" : "";
 const nombreSeguro = String(m.nombre ?? "").replace(/'/g, "\\'");
 const tipoSeguro = String(m.tipo ?? "").replace(/'/g, "\\'");
 const precioUnitario = Number(m.precio_unitario || 0);
 const totalInventario = Number(m.cantidad_stock || 0) * precioUnitario;
+const maximoPorReq = Number(m.maximo_por_requisicion || 1);
 
 tabla.innerHTML += `
 <tr class="${clase}">
@@ -695,6 +842,7 @@ tabla.innerHTML += `
 ${m.cantidad_stock}
 <br><small>Minimo: ${m.stock_minimo}</small>
 </td>
+<td>${maximoPorReq}</td>
 <td>$${precioUnitario.toFixed(2)}</td>
 <td>$${totalInventario.toFixed(2)}</td>
 <td>
@@ -703,7 +851,7 @@ ${m.cantidad_stock}
 </td>
 <td>
     <div class="acciones-linea">
-        <button onclick="editarMaterial(${m.id}, '${nombreSeguro}', '${tipoSeguro}', ${m.stock_minimo}, ${precioUnitario}, ${Number(m.cantidad_stock || 0)})">Editar</button>
+        <button onclick="editarMaterial(${m.id}, '${nombreSeguro}', '${tipoSeguro}', ${m.stock_minimo}, ${precioUnitario}, ${Number(m.cantidad_stock || 0)}, ${maximoPorReq})">Editar</button>
         <button onclick="eliminarMaterial(${m.id})">Eliminar</button>
     </div>
 </td>
@@ -736,6 +884,7 @@ nombre:document.getElementById("nombre_material").value.trim(),
 cantidad_stock:parseInt(document.getElementById("cantidad_stock").value),
 tipo: document.getElementById("tipo_material").value,
 stock_minimo:parseInt(document.getElementById("stock_minimo").value),
+maximo_por_requisicion:parseInt(document.getElementById("maximo_por_requisicion").value, 10),
 precio_unitario:parseFloat(document.getElementById("precio_unitario").value)
 };
 
@@ -745,6 +894,10 @@ return;
 }
 if(Number.isNaN(material.precio_unitario) || material.precio_unitario < 0){
 alert("Precio unitario invalido");
+return;
+}
+if(Number.isNaN(material.maximo_por_requisicion) || material.maximo_por_requisicion < 1){
+alert("Maximo por requisicion invalido");
 return;
 }
 
@@ -763,6 +916,7 @@ return;
 document.getElementById("nombre_material").value="";
 document.getElementById("cantidad_stock").value="";
 document.getElementById("stock_minimo").value="";
+document.getElementById("maximo_por_requisicion").value="1";
 document.getElementById("precio_unitario").value="";
 
 cargarMateriales();
@@ -774,7 +928,7 @@ await fetch(`/materiales/${id}`,{method:"DELETE"});
 cargarMateriales();
 }
 
-async function editarMaterial(id, nombreActual, tipoActual, stockMinimoActual, precioActual, cantidadStockActual){
+async function editarMaterial(id, nombreActual, tipoActual, stockMinimoActual, precioActual, cantidadStockActual, maximoPorReqActual){
 const nombreNuevo = prompt("Editar nombre del material:", nombreActual);
 if(nombreNuevo === null) return;
 
@@ -784,12 +938,9 @@ alert("El nombre no puede estar vacio");
 return;
 }
 
-const tipoNuevo = prompt("Editar tipo (consumible/herramienta):", tipoActual);
-if(tipoNuevo === null) return;
-
-const tipo = tipoNuevo.trim().toLowerCase();
+const tipo = String(tipoActual || "").trim().toLowerCase();
 if(tipo !== "consumible" && tipo !== "herramienta"){
-alert("Tipo invalido");
+alert("Tipo invalido en el registro actual");
 return;
 }
 
@@ -811,6 +962,15 @@ alert("Stock minimo invalido");
 return;
 }
 
+const maximoPorReqNuevo = prompt("Editar maximo por requisicion:", String(maximoPorReqActual ?? 1));
+if(maximoPorReqNuevo === null) return;
+
+const maximo_por_requisicion = parseInt(maximoPorReqNuevo, 10);
+if(Number.isNaN(maximo_por_requisicion) || maximo_por_requisicion < 1){
+alert("Maximo por requisicion invalido");
+return;
+}
+
 const precioNuevoTxt = prompt("Editar precio unitario:", Number(precioActual || 0).toFixed(2));
 if(precioNuevoTxt === null) return;
 
@@ -823,7 +983,7 @@ return;
 const response = await fetch(`/materiales/${id}`,{
 method:"PUT",
 headers:{ "Content-Type":"application/json"},
-body:JSON.stringify({ nombre, tipo, stock_minimo, precio_unitario, cantidad_stock })
+body:JSON.stringify({ nombre, tipo, stock_minimo, precio_unitario, cantidad_stock, maximo_por_requisicion })
 });
 
 if(!response.ok){
@@ -832,6 +992,7 @@ alert(data.error || "Error al editar material");
 return;
 }
 
+await response.json().catch(() => ({}));
 cargarMateriales();
 }
 
@@ -844,16 +1005,22 @@ const url = busqueda
 
 const res = await fetch(url);
 const data = await res.json();
+const filtroStock = document.getElementById("filtro_stock_herramienta_modulo")?.value || "todos";
+const herramientas = data.filter(h => {
+    if (filtroStock !== "bajo_stock") return true;
+    return Number(h.cantidad || 0) <= Number(h.stock_minimo || 0);
+});
 
 const tabla = document.getElementById("tabla_herramienta_modulo");
 tabla.innerHTML = "";
 
-data.forEach(h => {
+herramientas.forEach(h => {
 const nombreSeguro = String(h.nombre ?? "").replace(/'/g, "\\'");
 const descripcionSegura = String(h.descripcion ?? "").replace(/'/g, "\\'");
 const stockMinimo = Number(h.stock_minimo || 0);
 const precioUnidad = Number(h.precio_por_unidad || 0);
 const totalHerramienta = Number(h.cantidad || 0) * precioUnidad;
+const maximoPorReq = Number(h.maximo_por_requisicion || 1);
 const clase = Number(h.cantidad || 0) <= stockMinimo ? "alerta" : "";
 
 tabla.innerHTML += `
@@ -864,6 +1031,7 @@ tabla.innerHTML += `
 ${h.cantidad}
 <br><small>Minimo: ${stockMinimo}</small>
 </td>
+<td>${maximoPorReq}</td>
 <td>$${precioUnidad.toFixed(2)}</td>
 <td>$${totalHerramienta.toFixed(2)}</td>
 <td>
@@ -872,7 +1040,7 @@ ${h.cantidad}
 </td>
 <td>
     <div class="acciones-linea">
-        <button onclick="editarHerramientaModulo(${h.id}, '${nombreSeguro}', '${descripcionSegura}', ${h.cantidad}, ${stockMinimo}, ${precioUnidad})">Editar</button>
+        <button onclick="editarHerramientaModulo(${h.id}, '${nombreSeguro}', '${descripcionSegura}', ${h.cantidad}, ${stockMinimo}, ${precioUnidad}, ${maximoPorReq})">Editar</button>
         <button onclick="eliminarHerramientaModulo(${h.id})">Eliminar</button>
     </div>
 </td>
@@ -890,6 +1058,7 @@ const nombre = document.getElementById("nombre_herramienta_modulo").value.trim()
 const descripcion = document.getElementById("descripcion_herramienta_modulo").value.trim();
 const cantidad = parseInt(document.getElementById("cantidad_herramienta_modulo").value, 10);
 const stock_minimo = parseInt(document.getElementById("stock_minimo_herramienta_modulo").value, 10);
+const maximo_por_requisicion = parseInt(document.getElementById("maximo_por_requisicion_herramienta_modulo").value, 10);
 const precio_por_unidad = parseFloat(document.getElementById("precio_herramienta_modulo").value);
 
 if(!nombre){
@@ -908,11 +1077,15 @@ if(Number.isNaN(precio_por_unidad) || precio_por_unidad < 0){
 alert("Precio invalido");
 return;
 }
+if(Number.isNaN(maximo_por_requisicion) || maximo_por_requisicion < 1){
+alert("Maximo por requisicion invalido");
+return;
+}
 
 const response = await fetch("/herramienta-modulo", {
 method:"POST",
 headers:{ "Content-Type":"application/json" },
-body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
+body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion })
 });
 
 if(!response.ok){
@@ -922,9 +1095,10 @@ return;
 }
 
 document.getElementById("nombre_herramienta_modulo").value = "";
-document.getElementById("descripcion_herramienta_modulo").value = "";
+document.getElementById("descripcion_herramienta_modulo").value = "herramienta";
 document.getElementById("cantidad_herramienta_modulo").value = "";
 document.getElementById("stock_minimo_herramienta_modulo").value = "";
+document.getElementById("maximo_por_requisicion_herramienta_modulo").value = "1";
 document.getElementById("precio_herramienta_modulo").value = "";
 
 cargarHerramientasModulo();
@@ -952,7 +1126,7 @@ return;
 cargarHerramientasModulo();
 }
 
-async function editarHerramientaModulo(id, nombreActual, descripcionActual, cantidadActual, stockMinimoActual, precioActual){
+async function editarHerramientaModulo(id, nombreActual, descripcionActual, cantidadActual, stockMinimoActual, precioActual, maximoPorReqActual){
 const nombreNuevo = prompt("Editar nombre:", nombreActual);
 if(nombreNuevo === null) return;
 const nombre = nombreNuevo.trim();
@@ -981,6 +1155,14 @@ alert("Stock minimo invalido");
 return;
 }
 
+const maximoNuevo = prompt("Editar maximo por requisicion:", String(maximoPorReqActual ?? 1));
+if(maximoNuevo === null) return;
+const maximo_por_requisicion = parseInt(maximoNuevo, 10);
+if(Number.isNaN(maximo_por_requisicion) || maximo_por_requisicion < 1){
+alert("Maximo por requisicion invalido");
+return;
+}
+
 const precioNuevo = prompt("Editar precio por unidad:", String(precioActual ?? 0));
 if(precioNuevo === null) return;
 const precio_por_unidad = parseFloat(precioNuevo);
@@ -992,7 +1174,7 @@ return;
 const response = await fetch(`/herramienta-modulo/${id}`, {
 method:"PUT",
 headers:{ "Content-Type":"application/json" },
-body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad })
+body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion })
 });
 
 if(!response.ok){
@@ -1316,7 +1498,18 @@ if(!Array.isArray(data) || data.length === 0){
     return;
 }
 
-data.forEach(item => {
+const filasVisibles = data.filter(item => {
+    const acumuladoNuevo = Number(item.acumulado_nuevo || 0);
+    const cambiosRegistrados = Number(item.cambios_registrados || 0);
+    return acumuladoNuevo > 0 || cambiosRegistrados > 0;
+});
+
+if(filasVisibles.length === 0){
+    tabla.innerHTML = `<tr><td colspan="5">Sin datos</td></tr>`;
+    return;
+}
+
+filasVisibles.forEach(item => {
     tabla.innerHTML += `
     <tr>
         <td>${item.linea || "-"}</td>
@@ -1719,6 +1912,16 @@ document.addEventListener("click", (e) => {
     if (!wrap.contains(e.target)) {
         menu.style.display = "none";
     }
+
+    const panel = document.getElementById("menu_lateral_admin");
+    const toggle = document.querySelector(".menu-toggle-btn");
+    if (panel && panel.classList.contains("open")) {
+        const clickEnPanel = panel.contains(e.target);
+        const clickEnToggle = !!(toggle && toggle.contains(e.target));
+        if (!clickEnPanel && !clickEnToggle) {
+            cerrarMenuLateralAdmin();
+        }
+    }
 });
 
 const usuarioAuth = JSON.parse(localStorage.getItem("usuario"));
@@ -1787,8 +1990,28 @@ function exportarRequisicionesModulo(){
     window.location.href=
     `/exportar-requisiciones-modulo?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
 }
+
+function exportarDevoluciones(){
+    const inicio=document.getElementById("fecha_inicio_devoluciones").value;
+    const fin=document.getElementById("fecha_fin_devoluciones").value;
+    const usuario=JSON.parse(localStorage.getItem("usuario"));
+
+    if(!inicio || !fin){
+        alert("Seleccione rango de fechas");
+        return;
+    }
+
+    if(!usuario){
+        alert("Usuario no identificado");
+        return;
+    }
+
+    window.location.href=
+    `/exportar-devoluciones?fecha_inicio=${inicio}&fecha_fin=${fin}&usuario_id=${usuario.id}`;
+}
 /* ================= INICIO ================= */
 
+actualizarMenuLateralAdmin(obtenerSeccionActivaAdmin() || "lineas");
 cargarLineas();
 cargarMateriales();
 cargarHerramientasModulo();

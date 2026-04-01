@@ -179,6 +179,67 @@ async function asegurarNumeroIdAlfanumerico() {
     `);
 }
 
+async function asegurarEstructuraRetornosMaterial() {
+    await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS cantidad_retorno_aceptada INTEGER NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS cantidad_retorno_devuelta_linea INTEGER NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS retorno_recibido_por_id INTEGER REFERENCES usuarios(id)
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS retorno_recibido_en TIMESTAMP
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS cantidad_retorno_aceptada INTEGER NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS cantidad_retorno_devuelta_linea INTEGER NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS retorno_recibido_por_id INTEGER REFERENCES usuarios(id)
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS retorno_recibido_en TIMESTAMP
+    `);
+
+    // Backfill para conservar historico existente de retornos ya procesados.
+    await pool.query(`
+        UPDATE detalle_requisicion
+        SET cantidad_retorno_aceptada = COALESCE(cantidad_entregada, 0)
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) = 'retorno'
+          AND COALESCE(cantidad_entregada, 0) > 0
+          AND COALESCE(cantidad_retorno_aceptada, 0) = 0
+          AND COALESCE(cantidad_retorno_devuelta_linea, 0) = 0
+    `);
+
+    await pool.query(`
+        UPDATE detalle_requisicion_modulo
+        SET cantidad_retorno_aceptada = COALESCE(cantidad_entregada, 0)
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) = 'retorno'
+          AND COALESCE(cantidad_entregada, 0) > 0
+          AND COALESCE(cantidad_retorno_aceptada, 0) = 0
+          AND COALESCE(cantidad_retorno_devuelta_linea, 0) = 0
+    `);
+}
+
 
 async function asegurarHorariosLogin() {
     await pool.query(`
@@ -210,6 +271,76 @@ async function asegurarEstructuraHerramientaModulo() {
         UPDATE herramienta_modulo
         SET stock_minimo = 0
         WHERE stock_minimo IS NULL
+    `);
+
+    await pool.query(`
+        ALTER TABLE materiales
+        ADD COLUMN IF NOT EXISTS maximo_por_requisicion INTEGER DEFAULT 1
+    `);
+
+    await pool.query(`
+        UPDATE materiales
+        SET maximo_por_requisicion = 1
+        WHERE maximo_por_requisicion IS NULL OR maximo_por_requisicion < 1
+    `);
+
+    await pool.query(`
+        ALTER TABLE materiales
+        ALTER COLUMN maximo_por_requisicion SET DEFAULT 1
+    `);
+
+    await pool.query(`
+        ALTER TABLE materiales
+        ALTER COLUMN maximo_por_requisicion SET NOT NULL
+    `);
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'chk_materiales_maximo_por_requisicion'
+            ) THEN
+                ALTER TABLE materiales
+                ADD CONSTRAINT chk_materiales_maximo_por_requisicion
+                CHECK (maximo_por_requisicion >= 1);
+            END IF;
+        END $$;
+    `);
+
+    await pool.query(`
+        ALTER TABLE herramienta_modulo
+        ADD COLUMN IF NOT EXISTS maximo_por_requisicion INTEGER DEFAULT 1
+    `);
+
+    await pool.query(`
+        UPDATE herramienta_modulo
+        SET maximo_por_requisicion = 1
+        WHERE maximo_por_requisicion IS NULL OR maximo_por_requisicion < 1
+    `);
+
+    await pool.query(`
+        ALTER TABLE herramienta_modulo
+        ALTER COLUMN maximo_por_requisicion SET DEFAULT 1
+    `);
+
+    await pool.query(`
+        ALTER TABLE herramienta_modulo
+        ALTER COLUMN maximo_por_requisicion SET NOT NULL
+    `);
+
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'chk_herramienta_modulo_maximo_por_requisicion'
+            ) THEN
+                ALTER TABLE herramienta_modulo
+                ADD CONSTRAINT chk_herramienta_modulo_maximo_por_requisicion
+                CHECK (maximo_por_requisicion >= 1);
+            END IF;
+        END $$;
     `);
 }
 
@@ -587,14 +718,19 @@ app.delete("/horarios-login/:id", async (req, res) => {
 ///////Agregar Materiales - PestaÃ±a ///////// 
 app.post("/materiales", async (req, res) => {
 
-    const { nombre, tipo, cantidad_stock, stock_minimo, precio_unitario } = req.body;
+    const { nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion } = req.body;
 
     if (!nombre || !tipo || cantidad_stock == null || stock_minimo == null || precio_unitario == null) {
         return res.status(400).json({ error: "Datos incompletos" });
     }
 
+    const maximoPorReqNum = parseInt(maximo_por_requisicion ?? 1, 10);
+
     if (cantidad_stock < 0 || stock_minimo < 0 || Number(precio_unitario) < 0) {
         return res.status(400).json({ error: "Stock/precio no pueden ser negativos" });
+    }
+    if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
+        return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
 
     try {
@@ -612,10 +748,12 @@ app.post("/materiales", async (req, res) => {
             await pool.query(
                 `UPDATE materiales
                  SET cantidad_stock = cantidad_stock + $1,
-                     precio_unitario = $4
+                     precio_unitario = $4,
+                     stock_minimo = $5,
+                     maximo_por_requisicion = $6
                  WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2))
                  AND tipo = $3`,
-                [cantidad_stock, nombre, tipo, Number(precio_unitario)]
+                [cantidad_stock, nombre, tipo, Number(precio_unitario), parseInt(stock_minimo, 10), maximoPorReqNum]
             );
 
             return res.json({ success: true, message: "Stock actualizado" });
@@ -624,9 +762,9 @@ app.post("/materiales", async (req, res) => {
 
             await pool.query(
                 `INSERT INTO materiales
-                (nombre, tipo, cantidad_stock, stock_minimo, precio_unitario)
-                VALUES ($1, $2, $3, $4, $5)`,
-                [nombre.trim(), tipo, cantidad_stock, stock_minimo, Number(precio_unitario)]
+                (nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion)
+                VALUES ($1, $2, $3, $4, $5, $6)`,
+                [nombre.trim(), tipo, cantidad_stock, stock_minimo, Number(precio_unitario), maximoPorReqNum]
             );
 
             return res.json({ success: true, message: "Material creado" });
@@ -639,7 +777,7 @@ app.post("/materiales", async (req, res) => {
 });
 app.put("/materiales/:id", async (req, res) => {
     const { id } = req.params;
-    const { nombre, tipo, stock_minimo, precio_unitario, cantidad_stock } = req.body;
+    const { nombre, tipo, stock_minimo, precio_unitario, cantidad_stock, maximo_por_requisicion } = req.body;
 
     if (!nombre || !tipo || stock_minimo == null || precio_unitario == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -654,6 +792,10 @@ app.put("/materiales/:id", async (req, res) => {
     }
     if (Number(precio_unitario) < 0 || Number.isNaN(Number(precio_unitario))) {
         return res.status(400).json({ error: "Precio unitario invalido" });
+    }
+    const maximoPorReqNum = parseInt(maximo_por_requisicion ?? 1, 10);
+    if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
+        return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
     let cantidadStockNum = null;
     if (cantidad_stock != null) {
@@ -670,16 +812,18 @@ app.put("/materiales/:id", async (req, res) => {
                  tipo = $2,
                  stock_minimo = $3,
                  precio_unitario = $4,
-                 cantidad_stock = COALESCE($5, cantidad_stock)
-             WHERE id = $6`,
-            [nombre.trim(), tipo, parseInt(stock_minimo, 10), Number(precio_unitario), cantidadStockNum, id]
+                 cantidad_stock = COALESCE($5, cantidad_stock),
+                 maximo_por_requisicion = $6
+             WHERE id = $7
+             RETURNING id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion`,
+            [nombre.trim(), tipo, parseInt(stock_minimo, 10), Number(precio_unitario), cantidadStockNum, maximoPorReqNum, id]
         );
 
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Material no encontrado" });
         }
 
-        res.json({ success: true });
+        res.json({ success: true, material: result.rows[0] });
 
     } catch (error) {
         console.error(error);
@@ -748,18 +892,32 @@ app.put("/materiales/:id/stock", async (req, res) => {
 app.get("/materiales", async (req, res) => {
     try {
 
-        const { buscar } = req.query;
+        const { buscar, tipo } = req.query;
 
         let query = `
-            SELECT id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario
+            SELECT id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion
             FROM materiales
         `;
 
         let values = [];
+        let where = [];
+
+        if (tipo) {
+            const tipoNorm = String(tipo).trim().toLowerCase();
+            if (!["consumible", "herramienta"].includes(tipoNorm)) {
+                return res.status(400).json({ error: "Tipo invalido" });
+            }
+            where.push(`LOWER(tipo) = $${values.length + 1}`);
+            values.push(tipoNorm);
+        }
 
         if (buscar) {
-            query += " WHERE LOWER(nombre) LIKE LOWER($1)";
+            where.push(`LOWER(nombre) LIKE LOWER($${values.length + 1})`);
             values.push(`%${buscar}%`);
+        }
+
+        if (where.length > 0) {
+            query += ` WHERE ${where.join(" AND ")}`;
         }
 
         query += " ORDER BY id ASC";
@@ -818,7 +976,7 @@ app.get("/herramienta-modulo", async (req, res) => {
         const { buscar } = req.query;
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
 
-        let query = `SELECT id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad FROM herramienta_modulo`;
+        let query = `SELECT id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion FROM herramienta_modulo`;
         const values = [];
 
         if (buscar) {
@@ -837,7 +995,7 @@ app.get("/herramienta-modulo", async (req, res) => {
 });
 
 app.post("/herramienta-modulo", async (req, res) => {
-    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad } = req.body;
+    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion } = req.body;
 
     if (!nombre || cantidad == null || precio_por_unidad == null || stock_minimo == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -846,6 +1004,7 @@ app.post("/herramienta-modulo", async (req, res) => {
     const cantidadNum = parseInt(cantidad, 10);
     const stockMinimoNum = parseInt(stock_minimo, 10);
     const precioNum = parseFloat(precio_por_unidad);
+    const maximoPorReqNum = parseInt(maximo_por_requisicion ?? 1, 10);
 
     if (Number.isNaN(cantidadNum) || cantidadNum < 0) {
         return res.status(400).json({ error: "Cantidad invalida" });
@@ -857,13 +1016,16 @@ app.post("/herramienta-modulo", async (req, res) => {
     if (Number.isNaN(precioNum) || precioNum < 0) {
         return res.status(400).json({ error: "Precio invalido" });
     }
+    if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
+        return res.status(400).json({ error: "Maximo por requisicion invalido" });
+    }
 
     try {
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
 
         await pool.query(
-            `INSERT INTO herramienta_modulo (nombre, ${colDesc}, cantidad, stock_minimo, precio_por_unidad) VALUES ($1, $2, $3, $4, $5)`,
-            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum]
+            `INSERT INTO herramienta_modulo (nombre, ${colDesc}, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion) VALUES ($1, $2, $3, $4, $5, $6)`,
+            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum]
         );
 
         res.json({ success: true });
@@ -875,7 +1037,7 @@ app.post("/herramienta-modulo", async (req, res) => {
 
 app.put("/herramienta-modulo/:id", async (req, res) => {
     const { id } = req.params;
-    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad } = req.body;
+    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion } = req.body;
 
     if (!nombre || cantidad == null || precio_por_unidad == null || stock_minimo == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -884,6 +1046,7 @@ app.put("/herramienta-modulo/:id", async (req, res) => {
     const cantidadNum = parseInt(cantidad, 10);
     const stockMinimoNum = parseInt(stock_minimo, 10);
     const precioNum = parseFloat(precio_por_unidad);
+    const maximoPorReqNum = parseInt(maximo_por_requisicion ?? 1, 10);
 
     if (Number.isNaN(cantidadNum) || cantidadNum < 0) {
         return res.status(400).json({ error: "Cantidad invalida" });
@@ -895,20 +1058,31 @@ app.put("/herramienta-modulo/:id", async (req, res) => {
     if (Number.isNaN(precioNum) || precioNum < 0) {
         return res.status(400).json({ error: "Precio invalido" });
     }
+    if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
+        return res.status(400).json({ error: "Maximo por requisicion invalido" });
+    }
 
     try {
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
 
         const result = await pool.query(
-            `UPDATE herramienta_modulo SET nombre = $1, ${colDesc} = $2, cantidad = $3, stock_minimo = $4, precio_por_unidad = $5 WHERE id = $6`,
-            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, id]
+            `UPDATE herramienta_modulo
+             SET nombre = $1,
+                 ${colDesc} = $2,
+                 cantidad = $3,
+                 stock_minimo = $4,
+                 precio_por_unidad = $5,
+                 maximo_por_requisicion = $6
+             WHERE id = $7
+             RETURNING id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion`,
+            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum, id]
         );
 
         if (result.rowCount === 0) {
             return res.status(404).json({ error: "Herramienta no encontrada" });
         }
 
-        res.json({ success: true });
+        res.json({ success: true, herramienta: result.rows[0] });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al editar herramienta de modulo" });
@@ -1674,7 +1848,10 @@ app.get("/exportar-requisiciones", async (req, res) => {
             [usuario_id]
         );
 
-        if (usuario.rows.length === 0 || usuario.rows[0].rol !== "admin") {
+        const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+
+        if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
             return res.status(403).json({ error: "Acceso no autorizado" });
         }
 
@@ -1701,7 +1878,7 @@ app.get("/exportar-requisiciones", async (req, res) => {
             JOIN detalle_requisicion d ON r.id = d.requisicion_id
             JOIN materiales m ON d.material_id = m.id
             LEFT JOIN lineas_produccion l ON r.linea_id = l.id
-            WHERE r.fecha BETWEEN $1 AND $2
+            WHERE r.fecha::date BETWEEN $1::date AND $2::date
               AND COALESCE(r.tipo_origen, 'ensamble') = 'ensamble'
             ORDER BY r.fecha DESC
         `, [fecha_inicio, fecha_fin]);
@@ -1739,7 +1916,10 @@ app.get("/exportar-requisiciones-modulo", async (req, res) => {
             [usuario_id]
         );
 
-        if (usuario.rows.length === 0 || usuario.rows[0].rol !== "admin") {
+        const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+
+        if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
             return res.status(403).json({ error: "Acceso no autorizado" });
         }
 
@@ -1766,7 +1946,7 @@ app.get("/exportar-requisiciones-modulo", async (req, res) => {
             JOIN detalle_requisicion_modulo d ON r.id = d.requisicion_id
             JOIN herramienta_modulo hm ON d.herramienta_modulo_id = hm.id
             LEFT JOIN lineas_produccion l ON r.linea_id = l.id
-            WHERE r.fecha BETWEEN $1 AND $2
+            WHERE r.fecha::date BETWEEN $1::date AND $2::date
               AND COALESCE(r.tipo_origen, 'ensamble') = 'modulo'
             ORDER BY r.fecha DESC
         `, [fecha_inicio, fecha_fin]);
@@ -1788,6 +1968,135 @@ app.get("/exportar-requisiciones-modulo", async (req, res) => {
     }
 });
 
+// Exportar historial de devoluciones (retornos)
+app.get("/exportar-devoluciones", async (req, res) => {
+
+    const { fecha_inicio, fecha_fin, usuario_id } = req.query;
+
+    if (!fecha_inicio || !fecha_fin || !usuario_id) {
+        return res.status(400).json({ error: "Datos incompletos" });
+    }
+
+    try {
+        const usuario = await pool.query(
+            "SELECT rol FROM usuarios WHERE id = $1",
+            [usuario_id]
+        );
+
+        const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+
+        if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
+            return res.status(403).json({ error: "Acceso no autorizado" });
+        }
+
+        const result = await pool.query(`
+            SELECT
+                t.requisicion,
+                t.fecha,
+                t.estado_general,
+                t.linea,
+                t.turno,
+                t.solicitante,
+                t.numero_id,
+                t.seccion,
+                t.material,
+                t.tipo_movimiento,
+                t.cantidad_solicitada,
+                t.cantidad_entregada,
+                t.cantidad_retorno_aceptada,
+                t.cantidad_retorno_devuelta_linea,
+                t.pendiente_aceptar,
+                t.pendiente_devolver_linea,
+                t.recibido_por,
+                t.retorno_recibido_en
+            FROM (
+                SELECT
+                    r.id AS requisicion,
+                    r.fecha,
+                    r.estado_general,
+                    l.nombre AS linea,
+                    COALESCE(r.turno, CASE
+                        WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') THEN 'Turno 01'
+                        WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00'
+                           OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
+                        ELSE 'Fuera de turno'
+                    END) AS turno,
+                    u.nombre AS solicitante,
+                    u.numero_id,
+                    'ensamble' AS seccion,
+                    m.nombre AS material,
+                    d.tipo_movimiento,
+                    d.cantidad_solicitada,
+                    d.cantidad_entregada,
+                    COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada,
+                    COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea,
+                    GREATEST(COALESCE(d.cantidad_solicitada, 0) - COALESCE(d.cantidad_entregada, 0), 0) AS pendiente_aceptar,
+                    GREATEST(COALESCE(d.cantidad_retorno_aceptada, 0) - COALESCE(d.cantidad_retorno_devuelta_linea, 0), 0) AS pendiente_devolver_linea,
+                    ur.nombre AS recibido_por,
+                    d.retorno_recibido_en
+                FROM requisiciones r
+                JOIN usuarios u ON r.usuario_id = u.id
+                JOIN detalle_requisicion d ON r.id = d.requisicion_id
+                JOIN materiales m ON d.material_id = m.id
+                LEFT JOIN usuarios ur ON d.retorno_recibido_por_id = ur.id
+                LEFT JOIN lineas_produccion l ON r.linea_id = l.id
+                WHERE r.fecha::date BETWEEN $1::date AND $2::date
+                  AND LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno'
+
+                UNION ALL
+
+                SELECT
+                    r.id AS requisicion,
+                    r.fecha,
+                    r.estado_general,
+                    l.nombre AS linea,
+                    COALESCE(r.turno, CASE
+                        WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') THEN 'Turno 01'
+                        WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00'
+                           OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
+                        ELSE 'Fuera de turno'
+                    END) AS turno,
+                    u.nombre AS solicitante,
+                    u.numero_id,
+                    'modulo' AS seccion,
+                    hm.nombre AS material,
+                    dm.tipo_movimiento,
+                    dm.cantidad_solicitada,
+                    dm.cantidad_entregada,
+                    COALESCE(dm.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada,
+                    COALESCE(dm.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea,
+                    GREATEST(COALESCE(dm.cantidad_solicitada, 0) - COALESCE(dm.cantidad_entregada, 0), 0) AS pendiente_aceptar,
+                    GREATEST(COALESCE(dm.cantidad_retorno_aceptada, 0) - COALESCE(dm.cantidad_retorno_devuelta_linea, 0), 0) AS pendiente_devolver_linea,
+                    ur.nombre AS recibido_por,
+                    dm.retorno_recibido_en
+                FROM requisiciones r
+                JOIN usuarios u ON r.usuario_id = u.id
+                JOIN detalle_requisicion_modulo dm ON r.id = dm.requisicion_id
+                JOIN herramienta_modulo hm ON dm.herramienta_modulo_id = hm.id
+                LEFT JOIN usuarios ur ON dm.retorno_recibido_por_id = ur.id
+                LEFT JOIN lineas_produccion l ON r.linea_id = l.id
+                WHERE r.fecha::date BETWEEN $1::date AND $2::date
+                  AND LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno'
+            ) t
+            ORDER BY t.fecha DESC, t.requisicion DESC, t.seccion ASC, t.material ASC
+        `, [fecha_inicio, fecha_fin]);
+
+        const worksheet = XLSX.utils.json_to_sheet(result.rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Devoluciones");
+
+        const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+        res.setHeader("Content-Disposition", "attachment; filename=devoluciones.xlsx");
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.send(buffer);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al exportar devoluciones" });
+    }
+});
+
 ///////////////////////////////////////////
 ////////////// Empleado ///////////////////
 ///////////////////////////////////////////
@@ -1796,6 +2105,10 @@ app.post("/requisiciones", async (req, res) => {
     const { usuario_id, materiales, linea_id, tipo_origen, turno: turnoBody } = req.body;
     const origen = (tipo_origen || "ensamble").toLowerCase();
     const turno = normalizarTurno(turnoBody) || obtenerTurnoActualTijuana();
+    const materialesNormalizados = [];
+    const acumuladoPorMaterial = new Map();
+    const acumuladoRetornoPorMaterial = new Map();
+    let enTransaccion = false;
 
     if (!linea_id) {
         return res.status(400).json({ error: "Debe seleccionar una linea" });
@@ -1807,6 +2120,43 @@ app.post("/requisiciones", async (req, res) => {
 
     if (!Array.isArray(materiales) || materiales.length === 0) {
         return res.status(400).json({ error: "Debe agregar al menos un material" });
+    }
+
+    const esTipoRetorno = (tipoMovimiento) =>
+        String(tipoMovimiento || "").trim().toLowerCase() === "retorno";
+
+    for (const mat of materiales) {
+        const materialIdNum = parseInt(mat?.material_id, 10);
+        const cantidadNum = parseInt(mat?.cantidad, 10);
+        const tipoMovimiento = String(mat?.tipo_movimiento || "nuevo").trim().toLowerCase();
+
+        if (!Number.isInteger(materialIdNum) || materialIdNum <= 0) {
+            return res.status(400).json({ error: "Material invalido en la requisicion" });
+        }
+        if (!Number.isInteger(cantidadNum) || cantidadNum <= 0) {
+            return res.status(400).json({ error: "Cantidad invalida en la requisicion" });
+        }
+        if (!["nuevo", "cambio", "retorno"].includes(tipoMovimiento)) {
+            return res.status(400).json({ error: "Tipo de movimiento invalido" });
+        }
+
+        materialesNormalizados.push({
+            material_id: materialIdNum,
+            cantidad: cantidadNum,
+            tipo_movimiento: tipoMovimiento
+        });
+
+        if (!esTipoRetorno(tipoMovimiento)) {
+            acumuladoPorMaterial.set(
+                materialIdNum,
+                (acumuladoPorMaterial.get(materialIdNum) || 0) + cantidadNum
+            );
+        } else {
+            acumuladoRetornoPorMaterial.set(
+                materialIdNum,
+                (acumuladoRetornoPorMaterial.get(materialIdNum) || 0) + cantidadNum
+            );
+        }
     }
 
     try {
@@ -1824,7 +2174,73 @@ app.post("/requisiciones", async (req, res) => {
             return res.status(403).json({ error: "Usuario deshabilitado" });
         }
 
+        const idsMaterial = [...acumuladoPorMaterial.keys()];
+        if (idsMaterial.length > 0) {
+            const limites = await pool.query(
+                origen === "modulo"
+                    ? `SELECT id, nombre, COALESCE(maximo_por_requisicion, 1) AS maximo_por_requisicion
+                       FROM herramienta_modulo
+                       WHERE id = ANY($1::INT[])`
+                    : `SELECT id, nombre, COALESCE(maximo_por_requisicion, 1) AS maximo_por_requisicion
+                       FROM materiales
+                       WHERE id = ANY($1::INT[])`,
+                [idsMaterial]
+            );
+
+            const limitePorMaterial = new Map(
+                limites.rows.map((r) => [Number(r.id), r])
+            );
+
+            for (const materialId of idsMaterial) {
+                const infoMaterial = limitePorMaterial.get(materialId);
+
+                if (!infoMaterial) {
+                    return res.status(400).json({ error: `Material no encontrado (ID ${materialId})` });
+                }
+
+                const maximoPermitido = Math.max(parseInt(infoMaterial.maximo_por_requisicion, 10) || 1, 1);
+                const totalSolicitado = acumuladoPorMaterial.get(materialId) || 0;
+
+                if (totalSolicitado > maximoPermitido) {
+                    return res.status(400).json({
+                        error: `El material "${infoMaterial.nombre}" permite maximo ${maximoPermitido} por requisicion. Solicitado: ${totalSolicitado}`
+                    });
+                }
+            }
+        }
+
+        const idsRetorno = [...acumuladoRetornoPorMaterial.keys()];
+        if (idsRetorno.length > 0) {
+            const disponiblesRetorno = await obtenerMaterialesDisponiblesRetorno(parseInt(linea_id, 10), origen);
+            const disponiblesMap = new Map(
+                disponiblesRetorno.map((r) => [Number(r.material_id), r])
+            );
+
+            for (const materialId of idsRetorno) {
+                const infoDisponible = disponiblesMap.get(Number(materialId));
+                const solicitadoRetorno = acumuladoRetornoPorMaterial.get(materialId) || 0;
+                const disponibleLinea = Math.max(
+                    0,
+                    parseInt(infoDisponible?.cantidad_en_linea, 10) || 0
+                );
+                const nombreMaterial = infoDisponible?.material || `ID ${materialId}`;
+
+                if (!infoDisponible) {
+                    return res.status(400).json({
+                        error: `El material "${nombreMaterial}" no tiene existencia cargada en la linea para devolver.`
+                    });
+                }
+
+                if (solicitadoRetorno > disponibleLinea) {
+                    return res.status(400).json({
+                        error: `No puedes devolver ${solicitadoRetorno} de "${nombreMaterial}". Disponible en linea: ${disponibleLinea}.`
+                    });
+                }
+            }
+        }
+
         await pool.query("BEGIN");
+        enTransaccion = true;
 
         const nuevaReq = await pool.query(
             `INSERT INTO requisiciones (usuario_id, estado_general, linea_id, tipo_origen, turno)
@@ -1836,30 +2252,33 @@ app.post("/requisiciones", async (req, res) => {
         const requisicion_id = nuevaReq.rows[0].id;
 
         if (origen === "modulo") {
-            for (const mat of materiales) {
+            for (const mat of materialesNormalizados) {
                 await pool.query(
                     `INSERT INTO detalle_requisicion_modulo
                     (requisicion_id, herramienta_modulo_id, cantidad_solicitada, cantidad_entregada, estado, tipo_movimiento)
                     VALUES ($1, $2, $3, 0, 'pendiente', $4)`,
-                    [requisicion_id, parseInt(mat.material_id, 10), parseInt(mat.cantidad, 10), mat.tipo_movimiento || "nuevo"]
+                    [requisicion_id, mat.material_id, mat.cantidad, mat.tipo_movimiento]
                 );
             }
         } else {
-            for (const mat of materiales) {
+            for (const mat of materialesNormalizados) {
                 await pool.query(
                     `INSERT INTO detalle_requisicion
                     (requisicion_id, material_id, cantidad_solicitada, cantidad_entregada, estado, tipo_movimiento)
                     VALUES ($1, $2, $3, 0, 'pendiente', $4)`,
-                    [requisicion_id, parseInt(mat.material_id, 10), parseInt(mat.cantidad, 10), mat.tipo_movimiento || "nuevo"]
+                    [requisicion_id, mat.material_id, mat.cantidad, mat.tipo_movimiento]
                 );
             }
         }
 
         await pool.query("COMMIT");
+        enTransaccion = false;
         res.json({ success: true });
 
     } catch (error) {
-        await pool.query("ROLLBACK");
+        if (enTransaccion) {
+            await pool.query("ROLLBACK");
+        }
         console.error(error);
         res.status(500).json({ error: "Error al crear requisicion" });
     }
@@ -1881,7 +2300,21 @@ app.get("/requisiciones/usuario/:usuario_id", async (req, res) => {
                        OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
                     ELSE 'Fuera de turno'
                 END) AS turno,
-                COALESCE(r.estado_general, 'pendiente') AS estado_general
+                COALESCE(r.estado_general, 'pendiente') AS estado_general,
+                CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM detalle_requisicion d
+                        WHERE d.requisicion_id = r.id
+                          AND LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno'
+                    ) OR EXISTS (
+                        SELECT 1
+                        FROM detalle_requisicion_modulo dm
+                        WHERE dm.requisicion_id = r.id
+                          AND LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno'
+                    ) THEN 'devolucion'
+                    ELSE 'requisicion'
+                END AS tipo_historial
              FROM requisiciones r
              LEFT JOIN lineas_produccion l ON r.linea_id = l.id
              WHERE r.usuario_id = $1
@@ -1923,7 +2356,7 @@ async function obtenerMaterialesPorLinea(linea, seccion) {
                 m.nombre AS material,
                 SUM(CASE 
                     WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'nuevo' THEN d.cantidad_entregada
-                    WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno' THEN -d.cantidad_entregada
+                    WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(d.cantidad_retorno_aceptada, d.cantidad_entregada, 0) - COALESCE(d.cantidad_retorno_devuelta_linea, 0), 0)
                     ELSE 0 END) AS acumulado_nuevo,
                 SUM(CASE WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'cambio' THEN d.cantidad_entregada ELSE 0 END) AS cambios_registrados
             FROM requisiciones r
@@ -1941,7 +2374,7 @@ async function obtenerMaterialesPorLinea(linea, seccion) {
                 hm.nombre AS material,
                 SUM(CASE 
                     WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'nuevo' THEN dm.cantidad_entregada
-                    WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno' THEN -dm.cantidad_entregada
+                    WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(dm.cantidad_retorno_aceptada, dm.cantidad_entregada, 0) - COALESCE(dm.cantidad_retorno_devuelta_linea, 0), 0)
                     ELSE 0 END) AS acumulado_nuevo,
                 SUM(CASE WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'cambio' THEN dm.cantidad_entregada ELSE 0 END) AS cambios_registrados
             FROM requisiciones r
@@ -1958,6 +2391,70 @@ async function obtenerMaterialesPorLinea(linea, seccion) {
     const result = await pool.query(query, params);
     return result.rows;
 }
+
+async function obtenerMaterialesDisponiblesRetorno(lineaId, seccion = "ensamble") {
+    const seccionNorm = String(seccion || "ensamble").trim().toLowerCase();
+    const lineaIdNum = parseInt(lineaId, 10);
+
+    if (!Number.isInteger(lineaIdNum) || lineaIdNum <= 0) {
+        return [];
+    }
+
+    if (seccionNorm === "modulo") {
+        const queryModulo = `
+            SELECT
+                dm.herramienta_modulo_id AS material_id,
+                hm.nombre AS material,
+                SUM(CASE
+                    WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) IN ('nuevo', 'cambio') THEN dm.cantidad_entregada
+                    WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(dm.cantidad_retorno_aceptada, dm.cantidad_entregada, 0) - COALESCE(dm.cantidad_retorno_devuelta_linea, 0), 0)
+                    ELSE 0
+                END) AS cantidad_en_linea
+            FROM requisiciones r
+            JOIN detalle_requisicion_modulo dm ON r.id = dm.requisicion_id
+            JOIN herramienta_modulo hm ON dm.herramienta_modulo_id = hm.id
+            WHERE r.linea_id = $1
+              AND dm.cantidad_entregada > 0
+            GROUP BY dm.herramienta_modulo_id, hm.nombre
+            HAVING SUM(CASE
+                WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) IN ('nuevo', 'cambio') THEN dm.cantidad_entregada
+                WHEN LOWER(COALESCE(dm.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(dm.cantidad_retorno_aceptada, dm.cantidad_entregada, 0) - COALESCE(dm.cantidad_retorno_devuelta_linea, 0), 0)
+                ELSE 0
+            END) > 0
+            ORDER BY hm.nombre ASC
+        `;
+
+        const resultModulo = await pool.query(queryModulo, [lineaIdNum]);
+        return resultModulo.rows;
+    }
+
+    const queryEnsamble = `
+        SELECT
+            d.material_id,
+            m.nombre AS material,
+            SUM(CASE
+                WHEN LOWER(COALESCE(d.tipo_movimiento, '')) IN ('nuevo', 'cambio') THEN d.cantidad_entregada
+                WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(d.cantidad_retorno_aceptada, d.cantidad_entregada, 0) - COALESCE(d.cantidad_retorno_devuelta_linea, 0), 0)
+                ELSE 0
+            END) AS cantidad_en_linea
+        FROM requisiciones r
+        JOIN detalle_requisicion d ON r.id = d.requisicion_id
+        JOIN materiales m ON d.material_id = m.id
+        WHERE r.linea_id = $1
+          AND d.cantidad_entregada > 0
+          AND LOWER(COALESCE(m.tipo, '')) IN ('consumible', 'herramienta')
+        GROUP BY d.material_id, m.nombre
+        HAVING SUM(CASE
+            WHEN LOWER(COALESCE(d.tipo_movimiento, '')) IN ('nuevo', 'cambio') THEN d.cantidad_entregada
+            WHEN LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno' THEN -GREATEST(COALESCE(d.cantidad_retorno_aceptada, d.cantidad_entregada, 0) - COALESCE(d.cantidad_retorno_devuelta_linea, 0), 0)
+            ELSE 0
+        END) > 0
+        ORDER BY m.nombre ASC
+    `;
+
+    const resultEnsamble = await pool.query(queryEnsamble, [lineaIdNum]);
+    return resultEnsamble.rows;
+}
 app.get("/materiales-por-linea", async (req, res) => {
     const linea = (req.query.linea || "").trim();
     const seccion = (req.query.seccion || "todas").trim().toLowerCase();
@@ -1968,6 +2465,27 @@ app.get("/materiales-por-linea", async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al obtener material por linea" });
+    }
+});
+
+app.get("/materiales-retorno-por-linea", async (req, res) => {
+    const lineaId = parseInt(req.query.linea_id, 10);
+    const seccion = (req.query.seccion || "ensamble").trim().toLowerCase();
+
+    if (!Number.isInteger(lineaId) || lineaId <= 0) {
+        return res.status(400).json({ error: "Linea invalida" });
+    }
+
+    if (!["ensamble", "modulo"].includes(seccion)) {
+        return res.status(400).json({ error: "Seccion invalida" });
+    }
+
+    try {
+        const rows = await obtenerMaterialesDisponiblesRetorno(lineaId, seccion);
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al obtener materiales para devolucion" });
     }
 });
 
@@ -2010,17 +2528,33 @@ app.get("/exportar-materiales-por-linea", async (req, res) => {
 // Muestra las requisiciones
 app.get("/requisiciones-detalle", async (req, res) => {
 
-    const { tipo, cerradas, origen } = req.query;
+    const { tipo, cerradas, origen, movimiento, incluir_todas, incluir_rechazadas } = req.query;
     const origenReq = (origen || "ensamble").toLowerCase();
+    const movimientoReq = (movimiento || "").toLowerCase();
+    const incluirTodas = incluir_todas === "true";
+    const incluirRechazadas = incluir_rechazadas === "true";
 
     try {
 
         let filtroEstado;
 
-        if (cerradas === "true") {
-            filtroEstado = "r.estado_general = 'completa'";
+        if (incluirTodas) {
+            filtroEstado = incluirRechazadas
+                ? "COALESCE(r.estado_general, '') <> 'cancelada'"
+                : "COALESCE(r.estado_general, '') NOT IN ('rechazada','cancelada')";
+        } else if (cerradas === "true") {
+            filtroEstado = incluirRechazadas
+                ? "COALESCE(r.estado_general, '') IN ('completa','rechazada')"
+                : "r.estado_general = 'completa'";
         } else {
             filtroEstado = "COALESCE(r.estado_general, '') NOT IN ('completa','rechazada','cancelada')";
+        }
+
+        let filtroMovimiento = "";
+        if (movimientoReq === "retorno") {
+            filtroMovimiento = "AND LOWER(COALESCE(d.tipo_movimiento, '')) = 'retorno'";
+        } else if (movimientoReq === "sin_retorno") {
+            filtroMovimiento = "AND LOWER(COALESCE(d.tipo_movimiento, '')) <> 'retorno'";
         }
 
         if (origenReq === "modulo") {
@@ -2028,15 +2562,19 @@ app.get("/requisiciones-detalle", async (req, res) => {
                 "COALESCE(r.turno, CASE WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') " +
                 "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
                 "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
-                "u.nombre, u.numero_id, d.id AS detalle_id, hm.nombre AS material, 'modulo' AS tipo, " +
-                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento " +
+                "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, hm.nombre AS material, 'modulo' AS tipo, " +
+                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, " +
+                "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
+                "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
+                "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
                 "FROM requisiciones r " +
                 "JOIN usuarios u ON r.usuario_id = u.id " +
                 "JOIN detalle_requisicion_modulo d ON r.id = d.requisicion_id " +
                 "JOIN herramienta_modulo hm ON d.herramienta_modulo_id = hm.id " +
+                "LEFT JOIN usuarios ur ON d.retorno_recibido_por_id = ur.id " +
                 "LEFT JOIN lineas_produccion l ON r.linea_id = l.id " +
                 "WHERE " + filtroEstado + " AND COALESCE(r.tipo_origen, 'ensamble') = 'modulo' " +
-                "ORDER BY r.id DESC";
+                filtroMovimiento + " ORDER BY r.id DESC";
 
             const result = await pool.query(queryModulo);
             return res.json(result.rows);
@@ -2045,24 +2583,30 @@ app.get("/requisiciones-detalle", async (req, res) => {
         let filtroTipo = "";
 
         if (tipo === "consumible") {
-            filtroTipo = "AND m.tipo = 'consumible'";
+            filtroTipo = "AND LOWER(COALESCE(m.tipo, '')) = 'consumible'";
+        } else if (tipo === "herramienta") {
+            filtroTipo = "AND LOWER(COALESCE(m.tipo, '')) = 'herramienta'";
         } else if (tipo === "equipo") {
-            filtroTipo = "AND m.tipo = 'equipo'";
+            filtroTipo = "AND LOWER(COALESCE(m.tipo, '')) = 'equipo'";
         }
 
         const query = "SELECT r.id AS requisicion_id, r.estado_general, r.fecha, " +
             "COALESCE(r.turno, CASE WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') " +
             "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
             "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
-            "u.nombre, u.numero_id, d.id AS detalle_id, m.nombre AS material, m.tipo, " +
-            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento " +
+            "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, m.nombre AS material, m.tipo, " +
+            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, " +
+            "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
+            "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
+            "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
             "FROM requisiciones r " +
             "JOIN usuarios u ON r.usuario_id = u.id " +
             "JOIN detalle_requisicion d ON r.id = d.requisicion_id " +
             "JOIN materiales m ON d.material_id = m.id " +
+            "LEFT JOIN usuarios ur ON d.retorno_recibido_por_id = ur.id " +
             "LEFT JOIN lineas_produccion l ON r.linea_id = l.id " +
             "WHERE " + filtroEstado + " AND COALESCE(r.tipo_origen, 'ensamble') = 'ensamble' " +
-            filtroTipo + " ORDER BY r.id DESC";
+            filtroTipo + " " + filtroMovimiento + " ORDER BY r.id DESC";
 
         const result = await pool.query(query);
         res.json(result.rows);
@@ -2075,8 +2619,10 @@ app.get("/requisiciones-detalle", async (req, res) => {
 //Funcion entregar material
 app.post("/entregar-material", async (req, res) => {
 
-    const { detalle_id, cantidad_entregada, detalle_tipo } = req.body;
+    const { detalle_id, cantidad_entregada, detalle_tipo, accion_retorno, usuario_recibe_id } = req.body;
     const tipoDetalle = (detalle_tipo || "ensamble").toLowerCase();
+    const accionRetorno = String(accion_retorno || "").trim().toLowerCase();
+    const usuarioRecibeId = parseInt(usuario_recibe_id, 10);
 
     try {
 
@@ -2109,6 +2655,20 @@ app.post("/entregar-material", async (req, res) => {
         }
 
         const det = detalleResult.rows[0];
+        const reqEstadoResult = await pool.query(
+            "SELECT COALESCE(estado_general, '') AS estado_general FROM requisiciones WHERE id = $1",
+            [det.requisicion_id]
+        );
+        if (reqEstadoResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+        const estadoReq = String(reqEstadoResult.rows[0].estado_general || "").toLowerCase();
+        if (["rechazada", "cancelada"].includes(estadoReq)) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La devolucion fue rechazada y ya no puede procesarse" });
+        }
+
         const tipoMovimiento = (det.tipo_movimiento || "nuevo").toLowerCase();
         const nuevoEntregado = parseInt(det.cantidad_entregada, 10) + cantidad;
 
@@ -2122,6 +2682,27 @@ app.post("/entregar-material", async (req, res) => {
             return res.status(400).json({ error: "Stock insuficiente" });
         }
 
+        if (tipoMovimiento === "retorno") {
+            if (accionRetorno !== "aceptar") {
+                await pool.query("ROLLBACK");
+                return res.status(400).json({ error: "Accion de retorno invalida" });
+            }
+
+            if (!Number.isInteger(usuarioRecibeId) || usuarioRecibeId <= 0) {
+                await pool.query("ROLLBACK");
+                return res.status(400).json({ error: "Usuario que recibe invalido" });
+            }
+
+            const usuarioRecibe = await pool.query(
+                "SELECT id FROM usuarios WHERE id = $1",
+                [usuarioRecibeId]
+            );
+            if (usuarioRecibe.rows.length === 0) {
+                await pool.query("ROLLBACK");
+                return res.status(404).json({ error: "Usuario que recibe no encontrado" });
+            }
+        }
+
         let nuevoEstadoDetalle = "pendiente";
         if (nuevoEntregado < det.cantidad_solicitada) {
             nuevoEstadoDetalle = "parcial";
@@ -2130,34 +2711,56 @@ app.post("/entregar-material", async (req, res) => {
         }
 
         if (tipoDetalle === "modulo") {
-            await pool.query(
-                "UPDATE detalle_requisicion_modulo SET cantidad_entregada = $1, estado = $2 WHERE id = $3",
-                [nuevoEntregado, nuevoEstadoDetalle, detalle_id]
-            );
-
             if (tipoMovimiento === "retorno") {
+                await pool.query(
+                    `UPDATE detalle_requisicion_modulo
+                     SET cantidad_entregada = $1,
+                         estado = $2,
+                         cantidad_retorno_aceptada = COALESCE(cantidad_retorno_aceptada, 0) + $4,
+                         retorno_recibido_por_id = $5,
+                         retorno_recibido_en = CURRENT_TIMESTAMP
+                     WHERE id = $3`,
+                    [nuevoEntregado, nuevoEstadoDetalle, detalle_id, cantidad, usuarioRecibeId]
+                );
+
                 await pool.query(
                     "UPDATE herramienta_modulo SET cantidad = cantidad + $1 WHERE id = $2",
                     [cantidad, det.herramienta_modulo_id]
                 );
             } else {
                 await pool.query(
+                    "UPDATE detalle_requisicion_modulo SET cantidad_entregada = $1, estado = $2 WHERE id = $3",
+                    [nuevoEntregado, nuevoEstadoDetalle, detalle_id]
+                );
+
+                await pool.query(
                     "UPDATE herramienta_modulo SET cantidad = cantidad - $1 WHERE id = $2",
                     [cantidad, det.herramienta_modulo_id]
                 );
             }
         } else {
-            await pool.query(
-                "UPDATE detalle_requisicion SET cantidad_entregada = $1, estado = $2 WHERE id = $3",
-                [nuevoEntregado, nuevoEstadoDetalle, detalle_id]
-            );
-
             if (tipoMovimiento === "retorno") {
+                await pool.query(
+                    `UPDATE detalle_requisicion
+                     SET cantidad_entregada = $1,
+                         estado = $2,
+                         cantidad_retorno_aceptada = COALESCE(cantidad_retorno_aceptada, 0) + $4,
+                         retorno_recibido_por_id = $5,
+                         retorno_recibido_en = CURRENT_TIMESTAMP
+                     WHERE id = $3`,
+                    [nuevoEntregado, nuevoEstadoDetalle, detalle_id, cantidad, usuarioRecibeId]
+                );
+
                 await pool.query(
                     "UPDATE materiales SET cantidad_stock = cantidad_stock + $1 WHERE id = $2",
                     [cantidad, det.material_id]
                 );
             } else {
+                await pool.query(
+                    "UPDATE detalle_requisicion SET cantidad_entregada = $1, estado = $2 WHERE id = $3",
+                    [nuevoEntregado, nuevoEstadoDetalle, detalle_id]
+                );
+
                 await pool.query(
                     "UPDATE materiales SET cantidad_stock = cantidad_stock - $1 WHERE id = $2",
                     [cantidad, det.material_id]
@@ -2197,6 +2800,200 @@ app.post("/entregar-material", async (req, res) => {
         await pool.query("ROLLBACK");
         console.error(error);
         res.status(500).json({ error: "Error al entregar material" });
+    }
+});
+
+app.post("/retornos-material/devolver-linea", async (req, res) => {
+    const { detalle_id, cantidad_devolver, detalle_tipo, usuario_recibe_id } = req.body;
+    const tipoDetalle = (detalle_tipo || "ensamble").toLowerCase();
+    const usuarioRecibeId = parseInt(usuario_recibe_id, 10);
+    const cantidad = parseInt(cantidad_devolver, 10);
+
+    try {
+        if (!cantidad || cantidad <= 0) {
+            return res.status(400).json({ error: "Cantidad invalida" });
+        }
+
+        if (!Number.isInteger(usuarioRecibeId) || usuarioRecibeId <= 0) {
+            return res.status(400).json({ error: "Usuario que recibe invalido" });
+        }
+
+        await pool.query("BEGIN");
+
+        let detalleResult;
+        if (tipoDetalle === "modulo") {
+            detalleResult = await pool.query(
+                "SELECT d.*, hm.cantidad AS cantidad_stock FROM detalle_requisicion_modulo d " +
+                "JOIN herramienta_modulo hm ON d.herramienta_modulo_id = hm.id " +
+                "WHERE d.id = $1 FOR UPDATE OF d, hm",
+                [detalle_id]
+            );
+        } else {
+            detalleResult = await pool.query(
+                "SELECT d.*, m.cantidad_stock FROM detalle_requisicion d " +
+                "JOIN materiales m ON d.material_id = m.id " +
+                "WHERE d.id = $1 FOR UPDATE OF d, m",
+                [detalle_id]
+            );
+        }
+
+        if (detalleResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Detalle no encontrado" });
+        }
+
+        const usuarioRecibe = await pool.query(
+            "SELECT id FROM usuarios WHERE id = $1",
+            [usuarioRecibeId]
+        );
+        if (usuarioRecibe.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Usuario que recibe no encontrado" });
+        }
+
+        const det = detalleResult.rows[0];
+        const reqEstadoResult = await pool.query(
+            "SELECT COALESCE(estado_general, '') AS estado_general FROM requisiciones WHERE id = $1",
+            [det.requisicion_id]
+        );
+        if (reqEstadoResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+        const estadoReq = String(reqEstadoResult.rows[0].estado_general || "").toLowerCase();
+        if (["rechazada", "cancelada"].includes(estadoReq)) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La devolucion fue rechazada y ya no puede procesarse" });
+        }
+
+        const tipoMovimiento = (det.tipo_movimiento || "nuevo").toLowerCase();
+        const stockActual = parseInt(det.cantidad_stock, 10) || 0;
+        const aceptado = parseInt(det.cantidad_retorno_aceptada, 10) || 0;
+        const devueltoLinea = parseInt(det.cantidad_retorno_devuelta_linea, 10) || 0;
+        const pendienteDevolverLinea = Math.max(0, aceptado - devueltoLinea);
+
+        if (tipoMovimiento !== "retorno") {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Solo aplica para requisiciones de retorno" });
+        }
+
+        if (cantidad > pendienteDevolverLinea) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Excede lo aceptado pendiente de devolver a linea" });
+        }
+
+        if (cantidad > stockActual) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Stock insuficiente para devolver a linea" });
+        }
+
+        if (tipoDetalle === "modulo") {
+            await pool.query(
+                `UPDATE detalle_requisicion_modulo
+                 SET cantidad_retorno_devuelta_linea = COALESCE(cantidad_retorno_devuelta_linea, 0) + $2
+                 WHERE id = $1`,
+                [detalle_id, cantidad]
+            );
+
+            await pool.query(
+                "UPDATE herramienta_modulo SET cantidad = cantidad - $1 WHERE id = $2",
+                [cantidad, det.herramienta_modulo_id]
+            );
+        } else {
+            await pool.query(
+                `UPDATE detalle_requisicion
+                 SET cantidad_retorno_devuelta_linea = COALESCE(cantidad_retorno_devuelta_linea, 0) + $2
+                 WHERE id = $1`,
+                [detalle_id, cantidad]
+            );
+
+            await pool.query(
+                "UPDATE materiales SET cantidad_stock = cantidad_stock - $1 WHERE id = $2",
+                [cantidad, det.material_id]
+            );
+        }
+
+        await pool.query("COMMIT");
+        res.json({ success: true });
+    } catch (error) {
+        await pool.query("ROLLBACK");
+        console.error(error);
+        res.status(500).json({ error: "Error al devolver material a linea" });
+    }
+});
+
+app.put("/retornos-material/requisiciones/:id/rechazar", async (req, res) => {
+    const { id } = req.params;
+    const tipoDetalle = String(req.body?.detalle_tipo || "ensamble").trim().toLowerCase();
+
+    if (!["ensamble", "modulo"].includes(tipoDetalle)) {
+        return res.status(400).json({ error: "Tipo de detalle invalido" });
+    }
+
+    try {
+        await pool.query("BEGIN");
+
+        const reqResult = await pool.query(
+            `SELECT id, COALESCE(tipo_origen, 'ensamble') AS tipo_origen, COALESCE(estado_general, '') AS estado_general
+             FROM requisiciones
+             WHERE id = $1
+             FOR UPDATE`,
+            [id]
+        );
+
+        if (reqResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+
+        const reqInfo = reqResult.rows[0];
+        if (String(reqInfo.tipo_origen).toLowerCase() !== tipoDetalle) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La devolucion no corresponde a esa seccion" });
+        }
+
+        if (["rechazada", "cancelada"].includes(String(reqInfo.estado_general).toLowerCase())) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La devolucion ya esta cerrada" });
+        }
+
+        let retornoExiste;
+        if (tipoDetalle === "modulo") {
+            retornoExiste = await pool.query(
+                `SELECT 1
+                 FROM detalle_requisicion_modulo
+                 WHERE requisicion_id = $1
+                   AND LOWER(COALESCE(tipo_movimiento, '')) = 'retorno'
+                 LIMIT 1`,
+                [id]
+            );
+        } else {
+            retornoExiste = await pool.query(
+                `SELECT 1
+                 FROM detalle_requisicion
+                 WHERE requisicion_id = $1
+                   AND LOWER(COALESCE(tipo_movimiento, '')) = 'retorno'
+                 LIMIT 1`,
+                [id]
+            );
+        }
+
+        if (retornoExiste.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La requisicion no es de devolucion" });
+        }
+
+        await pool.query(
+            "UPDATE requisiciones SET estado_general = 'rechazada' WHERE id = $1",
+            [id]
+        );
+
+        await pool.query("COMMIT");
+        res.json({ success: true });
+    } catch (error) {
+        await pool.query("ROLLBACK");
+        console.error(error);
+        res.status(500).json({ error: "Error al rechazar devolucion" });
     }
 });
 // Supervisor rechaza (cancela) requisicion de consumibles/modulo
@@ -2692,6 +3489,7 @@ app.put("/asignaciones/:id/solicitar-devolucion", async (req, res) => {
 Promise.all([
     asegurarIntegridadAsignaciones(),
     asegurarEstructuraRequisiciones(),
+    asegurarEstructuraRetornosMaterial(),
     asegurarEstadoUsuarios(),
     asegurarNumeroIdAlfanumerico(),
     asegurarHorariosLogin(),
