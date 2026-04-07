@@ -196,6 +196,17 @@ function estaEditandoFormulario(){
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
+const cacheHtmlPorContenedorSupervisor = new WeakMap();
+function actualizarHtmlSinParpadeo(contenedor, html){
+    if (!contenedor) return false;
+    const nuevoHtml = String(html || "");
+    const htmlPrevio = cacheHtmlPorContenedorSupervisor.get(contenedor);
+    if (htmlPrevio === nuevoHtml) return false;
+    cacheHtmlPorContenedorSupervisor.set(contenedor, nuevoHtml);
+    contenedor.innerHTML = nuevoHtml;
+    return true;
+}
+
 let filtroDevolucionesCerradas = "todas";
 
 function actualizarEstadoBotonFiltroDevoluciones() {
@@ -263,6 +274,10 @@ function actualizarMenuLateralSupervisor(id){
 function cerrarSesion(){
     localStorage.removeItem("usuario");
     localStorage.removeItem("token");
+    localStorage.removeItem("sesion_timeout_ms");
+    localStorage.removeItem("sesion_inicia_en");
+    localStorage.removeItem("sesion_expira_en");
+    localStorage.removeItem("sesion_rol");
     window.location.href = "login.html";
 }
 
@@ -284,7 +299,49 @@ document.addEventListener("click", (e) => {
         }
     }
 });
-const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+const DURACION_SESION_MS = 10 * 60 * 1000;
+const ROLES_SESION_CORTA = new Set(["supervisor", "empleado"]);
+let redirigiendoPorSesionExpirada = false;
+
+function validarSesionActivaConLimite(usuarioActual){
+    if (!usuarioActual) return false;
+    const rol = String(usuarioActual.rol || "").toLowerCase();
+    if (!ROLES_SESION_CORTA.has(rol)) return true;
+
+    const rolSesion = String(localStorage.getItem("sesion_rol") || "").toLowerCase();
+    let expiraEn = Number(localStorage.getItem("sesion_expira_en"));
+
+    if (rolSesion !== rol || !Number.isFinite(expiraEn) || expiraEn <= 0) {
+        const ahora = Date.now();
+        expiraEn = ahora + DURACION_SESION_MS;
+        localStorage.setItem("sesion_timeout_ms", String(DURACION_SESION_MS));
+        localStorage.setItem("sesion_inicia_en", String(ahora));
+        localStorage.setItem("sesion_expira_en", String(expiraEn));
+        localStorage.setItem("sesion_rol", rol);
+    }
+
+    if (Date.now() >= expiraEn) {
+        if (redirigiendoPorSesionExpirada) return false;
+        redirigiendoPorSesionExpirada = true;
+        localStorage.removeItem("usuario");
+        localStorage.removeItem("token");
+        localStorage.removeItem("sesion_timeout_ms");
+        localStorage.removeItem("sesion_inicia_en");
+        localStorage.removeItem("sesion_expira_en");
+        localStorage.removeItem("sesion_rol");
+        alert("Tu sesion expiro (10 minutos). Inicia sesion nuevamente.");
+        window.location.href = "login.html";
+        return false;
+    }
+
+    return true;
+}
+
+let usuario = JSON.parse(localStorage.getItem("usuario"));
+if (usuario && !validarSesionActivaConLimite(usuario)) {
+    usuario = null;
+}
 
 if (!usuario || usuario.rol !== "supervisor") {
     alert("Acceso no autorizado");
@@ -408,11 +465,16 @@ function refrescarSeccionActivaSupervisor() {
 }
 
 async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo) {
-    const response = await fetch(url);
-    const data = await response.json();
-
     const contenedor = document.getElementById(contenedorId);
-    contenedor.innerHTML = "";
+    if (!contenedor) return;
+
+    const response = await fetch(url);
+    const data = await response.json().catch(() => []);
+
+    if (!response.ok || !Array.isArray(data)) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Error al cargar requisiciones.</p>`);
+        return;
+    }
 
     const agrupadas = {};
     data.forEach(item => {
@@ -422,10 +484,14 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
         agrupadas[item.requisicion_id].detalles.push(item);
     });
 
-    for (let reqId in agrupadas) {
+    const ids = Object.keys(agrupadas);
+    if (ids.length === 0) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Sin requisiciones activas.</p>`);
+        return;
+    }
+
+    const htmlFinal = ids.map((reqId) => {
         const req = agrupadas[reqId];
-        const div = document.createElement("div");
-        div.className = "card";
         const tiposMov = [...new Set(
             req.detalles
                 .map(d => String(d.tipo_movimiento || "").trim().toLowerCase())
@@ -434,11 +500,21 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
         const tiposTexto = tiposMov.length
             ? tiposMov.map(t => t.charAt(0).toUpperCase() + t.slice(1)).join(", ")
             : "-";
+        const tieneNuevoSinDecision = req.detalles.some((d) => {
+            const mov = String(d.tipo_movimiento || "").trim().toLowerCase();
+            const estadoDet = String(d.estado || "").trim().toLowerCase();
+            const aprobado = d.aprobado_supervisor === true || String(d.aprobado_supervisor).toLowerCase() === "true";
+            return mov === "nuevo" && estadoDet !== "rechazada" && !aprobado;
+        });
+        const botonRechazarReq = tieneNuevoSinDecision
+            ? ""
+            : `<button onclick="rechazarRequisicion(${reqId}, '${detalleTipo}')">Rechazar</button>`;
 
         let html = `
+            <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <h3 style="margin:0;">Requisicion #${reqId}</h3>
-                <button onclick="rechazarRequisicion(${reqId}, '${detalleTipo}')">Rechazar</button>
+                ${botonRechazarReq}
             </div>
             <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
             <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
@@ -448,6 +524,7 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
                 <thead>
                     <tr>
                         <th>Material</th>
+                        <th>Tipo</th>
                         <th>Solicitado</th>
                         <th>Entregado</th>
                         <th>Pendiente</th>
@@ -458,23 +535,38 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
         `;
 
         req.detalles.forEach(det => {
-            const pendiente = det.cantidad_solicitada - det.cantidad_entregada;
+            const estadoDetalle = String(det.estado || "").trim().toLowerCase();
+            const esRechazada = estadoDetalle === "rechazada";
+            const pendienteCalculado = det.cantidad_solicitada - det.cantidad_entregada;
+            const pendiente = esRechazada ? 0 : pendienteCalculado;
+            const mov = String(det.tipo_movimiento || "").trim().toLowerCase();
+            const aprobadoSupervisor = det.aprobado_supervisor === true || String(det.aprobado_supervisor).toLowerCase() === "true";
             let boton = "Completo";
 
-            if (pendiente > 0) {
-                const mov = String(det.tipo_movimiento || "").trim().toLowerCase();
+            if (esRechazada) {
+                boton = "Rechazada";
+            } else if (pendiente > 0) {
                 const accionTexto = mov.startsWith("retorno")
                     ? "Recibido"
                     : "Entregar";
-                boton = `
-                    <input type="number" min="1" max="${pendiente}" id="${prefijoInput}${det.detalle_id}" placeholder="Cantidad" style="width:70px;">
-                    <button onclick="entregarConsumible(${det.detalle_id}, '${detalleTipo}', '${prefijoInput}')">${accionTexto}</button>
-                `;
+                if (mov === "nuevo" && !aprobadoSupervisor) {
+                    boton = "-";
+                } else {
+                    boton = `
+                        <input type="number" min="1" max="${pendiente}" id="${prefijoInput}${det.detalle_id}" placeholder="Cantidad" style="width:70px;">
+                        <button onclick="entregarConsumible(${det.detalle_id}, '${detalleTipo}', '${prefijoInput}')">${accionTexto}</button>
+                    `;
+                }
             }
+
+            const tipoTexto = mov
+                ? (mov.charAt(0).toUpperCase() + mov.slice(1))
+                : "-";
 
             html += `
                 <tr>
                     <td>${det.material}</td>
+                    <td>${tipoTexto}</td>
                     <td>${det.cantidad_solicitada}</td>
                     <td>${det.cantidad_entregada}</td>
                     <td>${pendiente}</td>
@@ -483,10 +575,10 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
             `;
         });
 
-        html += `</tbody></table>`;
-        div.innerHTML = html;
-        contenedor.appendChild(div);
-    }
+        return html + `</tbody></table></div>`;
+    }).join("");
+
+    actualizarHtmlSinParpadeo(contenedor, htmlFinal);
 }
 
 async function cargarRequisiciones() {
@@ -498,16 +590,14 @@ async function cargarRequisicionesModulo() {
 }
 
 async function renderRetornos(contenedorId, url, prefijoInput, detalleTipo, modo = "activas") {
-    const response = await fetch(url);
-    const data = await response.json().catch(() => []);
-
     const contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
 
-    contenedor.innerHTML = "";
+    const response = await fetch(url);
+    const data = await response.json().catch(() => []);
 
     if (!response.ok) {
-        contenedor.innerHTML = `<p style="margin:0;">Error al cargar retornos.</p>`;
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Error al cargar retornos.</p>`);
         return;
     }
 
@@ -515,7 +605,7 @@ async function renderRetornos(contenedorId, url, prefijoInput, detalleTipo, modo
         const textoVacio = modo === "cerradas"
             ? "Sin devoluciones cerradas."
             : "Sin devoluciones activas.";
-        contenedor.innerHTML = `<p style="margin:0;">${textoVacio}</p>`;
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">${textoVacio}</p>`);
         return;
     }
 
@@ -555,21 +645,20 @@ async function renderRetornos(contenedorId, url, prefijoInput, detalleTipo, modo
         const textoVacio = modoNormalizado === "cerradas"
             ? "Sin devoluciones cerradas."
             : "Sin devoluciones activas.";
-        contenedor.innerHTML = `<p style="margin:0;">${textoVacio}</p>`;
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">${textoVacio}</p>`);
         return;
     }
 
+    let htmlFinal = "";
     for (const reqId in agrupadas) {
         const req = agrupadas[reqId];
-        const div = document.createElement("div");
-        div.className = "card";
-
         const solicitanteRol = req.info.rol_solicitante ? ` (${req.info.rol_solicitante})` : "";
         const botonRechazar = modoNormalizado === "activas"
             ? `<button onclick="rechazarRetorno(${reqId}, '${detalleTipo}')">Rechazar devolucion</button>`
             : "";
 
         let html = `
+            <div class="card">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <h3 style="margin-top:0;">Requisicion de devolucion #${reqId}</h3>
                 ${botonRechazar}
@@ -639,10 +728,10 @@ async function renderRetornos(contenedorId, url, prefijoInput, detalleTipo, modo
             `;
         });
 
-        html += `</tbody></table>`;
-        div.innerHTML = html;
-        contenedor.appendChild(div);
+        htmlFinal += html + `</tbody></table></div>`;
     }
+
+    actualizarHtmlSinParpadeo(contenedor, htmlFinal);
 }
 
 async function cargarRetornos() {
@@ -693,11 +782,16 @@ async function cargarRequisicionesCerradas() {
     if (fechaInicio) url += `&fecha_inicio=${encodeURIComponent(fechaInicio)}`;
     if (fechaFin) url += `&fecha_fin=${encodeURIComponent(fechaFin)}`;
 
-    const response = await fetch(url);
-    const data = await response.json();
-
     const contenedor = document.getElementById("requisiciones_cerradas");
-    contenedor.innerHTML = "";
+    if (!contenedor) return;
+
+    const response = await fetch(url);
+    const data = await response.json().catch(() => []);
+
+    if (!response.ok || !Array.isArray(data)) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Error al cargar requisiciones cerradas.</p>`);
+        return;
+    }
 
     const agrupadas = {};
     data.forEach(item => {
@@ -707,12 +801,17 @@ async function cargarRequisicionesCerradas() {
         agrupadas[item.requisicion_id].detalles.push(item);
     });
 
-    for (let reqId in agrupadas) {
+    const ids = Object.keys(agrupadas);
+    if (ids.length === 0) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Sin requisiciones cerradas.</p>`);
+        return;
+    }
+
+    const htmlFinal = ids.map((reqId) => {
         const req = agrupadas[reqId];
-        const div = document.createElement("div");
-        div.className = "card";
 
         let html = `
+            <div class="card">
             <h3>Requisicion #${reqId}</h3>
             <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
             <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
@@ -738,10 +837,10 @@ async function cargarRequisicionesCerradas() {
             `;
         });
 
-        html += `</tbody></table>`;
-        div.innerHTML = html;
-        contenedor.appendChild(div);
-    }
+        return html + `</tbody></table></div>`;
+    }).join("");
+
+    actualizarHtmlSinParpadeo(contenedor, htmlFinal);
 }
 
 async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoInput = "entrega_") {
@@ -752,7 +851,7 @@ async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoI
         return;
     }
 
-    await fetch("/entregar-material", {
+    const response = await fetch("/entregar-material", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -761,6 +860,12 @@ async function entregarConsumible(detalle_id, detalleTipo = "ensamble", prefijoI
             detalle_tipo: detalleTipo
         })
     });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "No se pudo entregar material");
+        return;
+    }
 
     if (detalleTipo === "modulo") {
         cargarRequisicionesModulo();
@@ -981,6 +1086,12 @@ async function entregar(id) {
 mostrarConsumibles();
 
 setInterval(() => {
+    const usuarioSesion = JSON.parse(localStorage.getItem("usuario") || "null");
+    validarSesionActivaConLimite(usuarioSesion);
+}, 10000);
+
+setInterval(() => {
+    if (document.hidden) return;
     if (estaEditandoFormulario()) return;
     refrescarSeccionActivaSupervisor();
 }, 5000);

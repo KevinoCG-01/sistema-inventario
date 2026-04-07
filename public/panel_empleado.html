@@ -188,6 +188,7 @@
             <select id="filtro_req_estado">
                 <option value="todas">Todas</option>
                 <option value="aprobada">Aprobada</option>
+                <option value="pendiente_admin">Pendiente aprobacion admin</option>
                 <option value="rechazada">Rechazada</option>
                 <option value="completa">Completa</option>
             </select>
@@ -466,6 +467,10 @@ function irACrearDevolucionModulo(){
 function cerrarSesion(){
     localStorage.removeItem("usuario");
     localStorage.removeItem("token");
+    localStorage.removeItem("sesion_timeout_ms");
+    localStorage.removeItem("sesion_inicia_en");
+    localStorage.removeItem("sesion_expira_en");
+    localStorage.removeItem("sesion_rol");
     window.location.href = "login.html";
 }
 
@@ -488,7 +493,48 @@ document.addEventListener("click", (e) => {
     }
 });
 
-const usuario = JSON.parse(localStorage.getItem("usuario"));
+const DURACION_SESION_MS = 10 * 60 * 1000;
+const ROLES_SESION_CORTA = new Set(["supervisor", "empleado"]);
+let redirigiendoPorSesionExpirada = false;
+
+function validarSesionActivaConLimite(usuarioActual){
+    if (!usuarioActual) return false;
+    const rol = String(usuarioActual.rol || "").toLowerCase();
+    if (!ROLES_SESION_CORTA.has(rol)) return true;
+
+    const rolSesion = String(localStorage.getItem("sesion_rol") || "").toLowerCase();
+    let expiraEn = Number(localStorage.getItem("sesion_expira_en"));
+
+    if (rolSesion !== rol || !Number.isFinite(expiraEn) || expiraEn <= 0) {
+        const ahora = Date.now();
+        expiraEn = ahora + DURACION_SESION_MS;
+        localStorage.setItem("sesion_timeout_ms", String(DURACION_SESION_MS));
+        localStorage.setItem("sesion_inicia_en", String(ahora));
+        localStorage.setItem("sesion_expira_en", String(expiraEn));
+        localStorage.setItem("sesion_rol", rol);
+    }
+
+    if (Date.now() >= expiraEn) {
+        if (redirigiendoPorSesionExpirada) return false;
+        redirigiendoPorSesionExpirada = true;
+        localStorage.removeItem("usuario");
+        localStorage.removeItem("token");
+        localStorage.removeItem("sesion_timeout_ms");
+        localStorage.removeItem("sesion_inicia_en");
+        localStorage.removeItem("sesion_expira_en");
+        localStorage.removeItem("sesion_rol");
+        alert("Tu sesion expiro (10 minutos). Inicia sesion nuevamente.");
+        window.location.href = "login.html";
+        return false;
+    }
+
+    return true;
+}
+
+let usuario = JSON.parse(localStorage.getItem("usuario"));
+if (usuario && !validarSesionActivaConLimite(usuario)) {
+    usuario = null;
+}
 
 if (!usuario) {
     alert("Debe iniciar sesion");
@@ -967,6 +1013,7 @@ async function enviarDevolucion() {
 function formatearEstadoRequisicion(estado){
     const map = {
         aprobada: "Aprobada",
+        pendiente_admin: "Pendiente aprobacion admin",
         parcial: "Parcial",
         completa: "Completada",
         rechazada: "Rechazada",
@@ -1359,16 +1406,30 @@ cargarResumenMaterialLinea();
 actualizarTurnoActualEmpleado();
 
 setInterval(() => {
+    const usuarioSesion = JSON.parse(localStorage.getItem("usuario") || "null");
+    validarSesionActivaConLimite(usuarioSesion);
+}, 10000);
+
+setInterval(() => {
+    if (document.hidden) return;
     if (estaEditandoFormulario()) return;
     actualizarTurnoActualEmpleado();
-    cargarLineas();
-    cargarMateriales();
+
+    if (estaSeccionVisible("panel_crear_requisicion")) {
+        cargarLineas();
+        cargarMateriales();
+    }
     if (estaSeccionVisible("panel_crear_devolucion")) {
+        cargarLineas();
         cargarMaterialesDevolucionLinea();
     }
-    cargarResumenMaterialLinea();
-    cargarRequisicionesEnviadas();
-}, 5000);
+    if (estaSeccionVisible("panel_material_linea")) {
+        cargarResumenMaterialLinea();
+    }
+    if (estaSeccionVisible("panel_requisiciones_enviadas")) {
+        cargarRequisicionesEnviadas();
+    }
+}, 7000);
 </script>
 
 </body>

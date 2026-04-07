@@ -146,7 +146,7 @@ table {
     border-collapse: collapse;
     background: #fff;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 th, td {
@@ -171,11 +171,183 @@ tbody tr:hover {
 #tabla_equipos td.col-equipo, #tabla_equipos td.col-serie, #tabla_equipos td.col-ubicacion { word-break: break-word; }
 .acciones-linea { display: grid; grid-template-columns: repeat(2, minmax(100px, 1fr)); gap: 6px; }
 .acciones-linea button { width: 100%; margin: 0; padding: 7px 8px; white-space: nowrap; }
+.acciones-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.acciones-menu-toggle {
+    min-width: 132px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(135deg, var(--brand-2), #0284c7);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.2;
+    box-shadow: 0 6px 14px rgba(2, 132, 199, 0.22);
+}
+
+.acciones-menu-toggle::after {
+    content: "";
+    display: inline-block;
+    margin-left: 8px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 6px solid #ffffff;
+    vertical-align: middle;
+}
+
+.acciones-menu.abierto .acciones-menu-toggle {
+    box-shadow:
+        0 0 0 3px rgba(14, 165, 166, 0.26),
+        0 8px 18px rgba(2, 132, 199, 0.28);
+}
+
+.acciones-menu-lista {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 148px;
+    padding: 8px;
+    border-radius: 14px;
+    border: 1px solid #bfeaf1;
+    background: #f6fdff;
+    box-shadow: 0 12px 26px rgba(2, 8, 23, 0.2);
+    display: none;
+    z-index: 120;
+}
+
+#tabla_materiales,
+#tabla_herramienta_modulo {
+    overflow: visible;
+}
+
+#tabla_materiales td,
+#tabla_herramienta_modulo td {
+    overflow: visible;
+}
+
+.acciones-menu.abierto .acciones-menu-lista {
+    display: grid;
+    gap: 6px;
+}
+
+.acciones-menu-item {
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(135deg, var(--brand-2), #0284c7);
+    color: #fff;
+    font-weight: 700;
+    text-align: left;
+}
 
 .alerta {
     background-color: #ffe5e5;
     color: #c62828;
     font-weight: bold;
+}
+
+th.col-imagen,
+td.col-imagen {
+    width: 76px;
+    text-align: center;
+}
+
+.miniatura-inventario {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #cfd8e3;
+    background: #f8fafc;
+}
+
+.miniatura-boton {
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    border-radius: 10px;
+    cursor: zoom-in;
+    box-shadow: none;
+}
+
+.miniatura-boton:hover {
+    filter: none;
+}
+
+.miniatura-boton:active {
+    transform: none;
+}
+
+.miniatura-boton:focus-visible {
+    outline: 2px solid #0ea5a6;
+    outline-offset: 2px;
+}
+
+.visor-imagen-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 8, 23, 0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 2000;
+}
+
+.visor-imagen-modal.abierto {
+    display: flex;
+}
+
+.visor-imagen-contenido {
+    width: min(92vw, 760px);
+    max-height: 90vh;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid #dbe3ea;
+    box-shadow: 0 20px 45px rgba(2, 8, 23, 0.35);
+    padding: 16px;
+    position: relative;
+}
+
+.visor-imagen-cerrar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 999px;
+    line-height: 1;
+    font-size: 20px;
+}
+
+.visor-imagen-principal {
+    width: 100%;
+    max-height: calc(90vh - 130px);
+    object-fit: contain;
+    border-radius: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.visor-imagen-titulo {
+    margin: 10px 0 0;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+}
+
+.sin-imagen {
+    opacity: .6;
 }
 
 @media (max-width: 980px) {
@@ -265,6 +437,7 @@ tbody tr:hover {
     <option value="consumible">Consumible</option>
     <option value="herramienta">Herramienta</option>
 </select><br><br>
+<input type="file" id="imagen_material" accept="image/*"><br><br>
 
 <input type="number" id="cantidad_stock" placeholder="Cantidad en Stock"><br><br>
 <input type="number" id="stock_minimo" placeholder="Stock Minimo"><br><br>
@@ -294,6 +467,7 @@ style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
 <table>
 <thead>
 <tr>
+<th class="col-imagen">Imagen</th>
 <th>Nombre</th>
 <th>Stock</th>
 <th>Max x Requisicion</th>
@@ -316,6 +490,7 @@ style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
     <option value="consumible">Consumible</option>
     <option value="herramienta" selected>Herramienta</option>
 </select><br><br>
+<input type="file" id="imagen_herramienta_modulo" accept="image/*"><br><br>
 <input type="number" id="cantidad_herramienta_modulo" placeholder="Cantidad"><br><br>
 <input type="number" id="stock_minimo_herramienta_modulo" placeholder="Stock minimo"><br><br>
 <input type="number" id="maximo_por_requisicion_herramienta_modulo" min="1" value="1" placeholder="Maximo por requisicion"><br><br>
@@ -339,6 +514,7 @@ style="padding:8px; width:300px; flex:0 0 300px; margin:0;">
 <table>
 <thead>
 <tr>
+<th class="col-imagen">Imagen</th>
 <th>Nombre</th>
 <th>Descripcion</th>
 <th>Stock</th>
@@ -414,6 +590,11 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 </thead>
 <tbody id="tabla_solicitudes"></tbody>
 </table>
+
+<hr style="margin:20px 0;">
+
+<h3 style="margin:0 0 10px 0;">Requisiciones de material pendientes (tipo Nuevo)</h3>
+<div id="solicitudes_material_pendientes"></div>
 
 </div>
 
@@ -612,6 +793,14 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 </div>
 </div>
 
+<div id="visor_imagen_modal" class="visor-imagen-modal" onclick="cerrarVistaImagen()">
+    <div class="visor-imagen-contenido" onclick="event.stopPropagation()">
+        <button type="button" class="visor-imagen-cerrar" onclick="cerrarVistaImagen()" aria-label="Cerrar vista">×</button>
+        <img id="visor_imagen_principal" class="visor-imagen-principal" alt="Vista ampliada">
+        <p id="visor_imagen_titulo" class="visor-imagen-titulo"></p>
+    </div>
+</div>
+
 <script>
 
 function estaEditandoFormulario(){
@@ -619,6 +808,17 @@ function estaEditandoFormulario(){
     if (!el) return false;
     const tag = el.tagName;
     return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+const cacheHtmlPorContenedorAdmin = new WeakMap();
+function actualizarHtmlSinParpadeoAdmin(contenedor, html){
+    if (!contenedor) return false;
+    const nuevoHtml = String(html || "");
+    const htmlPrevio = cacheHtmlPorContenedorAdmin.get(contenedor);
+    if (htmlPrevio === nuevoHtml) return false;
+    cacheHtmlPorContenedorAdmin.set(contenedor, nuevoHtml);
+    contenedor.innerHTML = nuevoHtml;
+    return true;
 }
 
 function actualizarMenuLateralAdmin(id){
@@ -809,6 +1009,228 @@ cargarLineas();
 
 //* ================= MATERIALES ================= */
 
+function leerArchivoComoDataUrl(archivo){
+return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result || ""));
+    lector.onerror = () => reject(new Error("No se pudo leer la imagen seleccionada"));
+    lector.readAsDataURL(archivo);
+});
+}
+
+async function obtenerImagenDesdeInput(inputId){
+const input = document.getElementById(inputId);
+if(!input || !input.files || input.files.length === 0) return null;
+
+const archivo = input.files[0];
+if(!archivo.type || !archivo.type.toLowerCase().startsWith("image/")){
+    throw new Error("Solo se permiten archivos de imagen");
+}
+
+const maxBytes = 5 * 1024 * 1024;
+if(archivo.size > maxBytes){
+    throw new Error("La imagen excede el limite permitido (5MB)");
+}
+
+const dataUrl = await leerArchivoComoDataUrl(archivo);
+if(!dataUrl || !dataUrl.startsWith("data:image/")){
+    throw new Error("Formato de imagen invalido");
+}
+
+return dataUrl;
+}
+
+async function seleccionarImagenDesdeDialogo(){
+return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.style.display = "none";
+    document.body.appendChild(input);
+
+    const limpiar = () => {
+        if (input.parentNode) input.parentNode.removeChild(input);
+    };
+
+    input.addEventListener("change", async () => {
+        try {
+            const archivo = input.files && input.files[0];
+            if (!archivo) {
+                limpiar();
+                resolve(null);
+                return;
+            }
+
+            if (!archivo.type || !archivo.type.toLowerCase().startsWith("image/")) {
+                throw new Error("Solo se permiten archivos de imagen");
+            }
+
+            const maxBytes = 5 * 1024 * 1024;
+            if (archivo.size > maxBytes) {
+                throw new Error("La imagen excede el limite permitido (5MB)");
+            }
+
+            const dataUrl = await leerArchivoComoDataUrl(archivo);
+            if (!dataUrl || !dataUrl.startsWith("data:image/")) {
+                throw new Error("Formato de imagen invalido");
+            }
+
+            limpiar();
+            resolve(dataUrl);
+        } catch (error) {
+            limpiar();
+            reject(error);
+        }
+    }, { once: true });
+
+    input.click();
+});
+}
+
+function decodificarDataAttr(valor){
+try{
+    return decodeURIComponent(String(valor || ""));
+}catch(_){
+    return String(valor || "");
+}
+}
+
+function abrirVistaImagen(urlCodificada, tituloCodificado){
+const modal = document.getElementById("visor_imagen_modal");
+const imagen = document.getElementById("visor_imagen_principal");
+const titulo = document.getElementById("visor_imagen_titulo");
+if(!modal || !imagen || !titulo) return;
+
+const url = decodificarDataAttr(urlCodificada);
+if(!url) return;
+const texto = decodificarDataAttr(tituloCodificado) || "Imagen";
+
+imagen.src = url;
+imagen.alt = texto;
+titulo.textContent = texto;
+modal.classList.add("abierto");
+document.body.style.overflow = "hidden";
+}
+
+function abrirVistaImagenDesdeBoton(boton){
+if(!boton) return;
+abrirVistaImagen(String(boton.dataset.src || ""), String(boton.dataset.titulo || ""));
+}
+
+function cerrarVistaImagen(){
+const modal = document.getElementById("visor_imagen_modal");
+const imagen = document.getElementById("visor_imagen_principal");
+const titulo = document.getElementById("visor_imagen_titulo");
+if(!modal || !imagen || !titulo) return;
+
+modal.classList.remove("abierto");
+imagen.src = "";
+imagen.alt = "Vista ampliada";
+titulo.textContent = "";
+document.body.style.overflow = "";
+}
+
+function cerrarMenusAcciones(){
+document.querySelectorAll(".acciones-menu.abierto").forEach(menu => menu.classList.remove("abierto"));
+}
+
+function toggleMenuAcciones(event, boton){
+if(event) event.stopPropagation();
+const menu = boton?.closest(".acciones-menu");
+if(!menu) return;
+const estabaAbierto = menu.classList.contains("abierto");
+cerrarMenusAcciones();
+if(!estabaAbierto) menu.classList.add("abierto");
+}
+
+document.addEventListener("click", (event) => {
+if(!event.target.closest(".acciones-menu")){
+    cerrarMenusAcciones();
+}
+});
+
+document.addEventListener("keydown", (event) => {
+if(event.key === "Escape"){
+    cerrarMenusAcciones();
+    cerrarVistaImagen();
+}
+});
+
+async function ejecutarAccionFilaDesdeDataset(dataset, accion){
+const tipoItem = String(dataset?.tipoItem || "").toLowerCase();
+const id = parseInt(dataset?.id, 10);
+if(!Number.isInteger(id) || id <= 0){
+    alert("Registro invalido");
+    return;
+}
+
+if(tipoItem === "material"){
+    if(accion === "subir_foto"){
+        await subirFotoMaterial(id);
+        return;
+    }
+    if(accion === "quitar_foto"){
+        await quitarFotoMaterial(id);
+        return;
+    }
+    if(accion === "editar"){
+        const nombre = decodificarDataAttr(dataset.nombre);
+        const tipo = decodificarDataAttr(dataset.tipo);
+        const stockMinimo = Number(dataset.stockMinimo || 0);
+        const precioUnitario = Number(dataset.precioUnitario || 0);
+        const cantidadStock = Number(dataset.cantidadStock || 0);
+        const maximoReq = Number(dataset.maximoReq || 1);
+        await editarMaterial(id, nombre, tipo, stockMinimo, precioUnitario, cantidadStock, maximoReq);
+        return;
+    }
+    if(accion === "eliminar"){
+        await eliminarMaterial(id);
+        return;
+    }
+}
+
+if(tipoItem === "herramienta_modulo"){
+    if(accion === "subir_foto"){
+        await subirFotoHerramientaModulo(id);
+        return;
+    }
+    if(accion === "quitar_foto"){
+        await quitarFotoHerramientaModulo(id);
+        return;
+    }
+    if(accion === "editar"){
+        const nombre = decodificarDataAttr(dataset.nombre);
+        const descripcion = decodificarDataAttr(dataset.descripcion);
+        const cantidad = Number(dataset.cantidad || 0);
+        const stockMinimo = Number(dataset.stockMinimo || 0);
+        const precioUnidad = Number(dataset.precioUnidad || 0);
+        const maximoReq = Number(dataset.maximoReq || 1);
+        await editarHerramientaModulo(id, nombre, descripcion, cantidad, stockMinimo, precioUnidad, maximoReq);
+        return;
+    }
+    if(accion === "eliminar"){
+        await eliminarHerramientaModulo(id);
+        return;
+    }
+}
+}
+
+async function ejecutarAccionMenu(event, boton, accion){
+if(event) event.stopPropagation();
+const menu = boton?.closest(".acciones-menu");
+if(!menu || !accion) return;
+await ejecutarAccionFilaDesdeDataset(menu.dataset, accion);
+cerrarMenusAcciones();
+}
+
+async function manejarAccionFila(selectEl){
+if(!selectEl) return;
+const accion = String(selectEl.value || "");
+if(!accion) return;
+selectEl.value = "";
+await ejecutarAccionFilaDesdeDataset(selectEl.dataset, accion);
+}
+
 async function cargarMateriales(busqueda = ""){
 
 const url = busqueda 
@@ -829,14 +1251,22 @@ tabla.innerHTML = "";
 materiales.forEach(m => {
 
 let clase = m.cantidad_stock <= m.stock_minimo ? "alerta" : "";
-const nombreSeguro = String(m.nombre ?? "").replace(/'/g, "\\'");
-const tipoSeguro = String(m.tipo ?? "").replace(/'/g, "\\'");
+const nombreData = encodeURIComponent(String(m.nombre ?? ""));
+const tipoData = encodeURIComponent(String(m.tipo ?? ""));
 const precioUnitario = Number(m.precio_unitario || 0);
 const totalInventario = Number(m.cantidad_stock || 0) * precioUnitario;
 const maximoPorReq = Number(m.maximo_por_requisicion || 1);
+const imagenHtml = m.imagen_url
+    ? `<button type="button" class="miniatura-boton" onclick="abrirVistaImagenDesdeBoton(this)" data-src="${encodeURIComponent(String(m.imagen_url || ""))}" data-titulo="${encodeURIComponent(String(m.nombre || "Material"))}"><img src="${m.imagen_url}" alt="Imagen material" class="miniatura-inventario"></button>`
+    : `<span class="sin-imagen">-</span>`;
+const opcionFotoTexto = m.imagen_url ? "Cambiar foto" : "Subir foto";
+const botonQuitarFoto = m.imagen_url
+    ? `<button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'quitar_foto')">Quitar foto</button>`
+    : "";
 
 tabla.innerHTML += `
 <tr class="${clase}">
+<td class="col-imagen">${imagenHtml}</td>
 <td>${m.nombre}</td>
 <td>
 ${m.cantidad_stock}
@@ -850,9 +1280,23 @@ ${m.cantidad_stock}
 <button onclick="sumarStock(${m.id})">+</button>
 </td>
 <td>
-    <div class="acciones-linea">
-        <button onclick="editarMaterial(${m.id}, '${nombreSeguro}', '${tipoSeguro}', ${m.stock_minimo}, ${precioUnitario}, ${Number(m.cantidad_stock || 0)}, ${maximoPorReq})">Editar</button>
-        <button onclick="eliminarMaterial(${m.id})">Eliminar</button>
+    <div
+        class="acciones-menu"
+        data-tipo-item="material"
+        data-id="${m.id}"
+        data-nombre="${nombreData}"
+        data-tipo="${tipoData}"
+        data-stock-minimo="${Number(m.stock_minimo || 0)}"
+        data-precio-unitario="${precioUnitario}"
+        data-cantidad-stock="${Number(m.cantidad_stock || 0)}"
+        data-maximo-req="${maximoPorReq}">
+        <button type="button" class="acciones-menu-toggle" onclick="toggleMenuAcciones(event, this)">Acciones</button>
+        <div class="acciones-menu-lista">
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'subir_foto')">${opcionFotoTexto}</button>
+            ${botonQuitarFoto}
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'editar')">Editar</button>
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'eliminar')">Eliminar</button>
+        </div>
     </div>
 </td>
 </tr>`;
@@ -879,13 +1323,22 @@ cargarMateriales();
 
 async function agregarMaterial(){
 
+let imagen_url = null;
+try{
+imagen_url = await obtenerImagenDesdeInput("imagen_material");
+}catch(error){
+alert(error.message || "Imagen invalida");
+return;
+}
+
 const material={
 nombre:document.getElementById("nombre_material").value.trim(),
 cantidad_stock:parseInt(document.getElementById("cantidad_stock").value),
 tipo: document.getElementById("tipo_material").value,
 stock_minimo:parseInt(document.getElementById("stock_minimo").value),
 maximo_por_requisicion:parseInt(document.getElementById("maximo_por_requisicion").value, 10),
-precio_unitario:parseFloat(document.getElementById("precio_unitario").value)
+precio_unitario:parseFloat(document.getElementById("precio_unitario").value),
+imagen_url
 };
 
 if(!material.nombre){
@@ -908,8 +1361,8 @@ body:JSON.stringify(material)
 });
 
 if(!response.ok){
-const data=await response.json();
-alert(data.error);
+const data=await response.json().catch(() => ({}));
+alert(data.error || `No se pudo agregar material (HTTP ${response.status})`);
 return;
 }
 
@@ -918,6 +1371,7 @@ document.getElementById("cantidad_stock").value="";
 document.getElementById("stock_minimo").value="";
 document.getElementById("maximo_por_requisicion").value="1";
 document.getElementById("precio_unitario").value="";
+document.getElementById("imagen_material").value="";
 
 cargarMateriales();
 }
@@ -996,6 +1450,47 @@ await response.json().catch(() => ({}));
 cargarMateriales();
 }
 
+async function subirFotoMaterial(id){
+try{
+    const imagen_url = await seleccionarImagenDesdeDialogo();
+    if(!imagen_url) return;
+
+    const response = await fetch(`/materiales/${id}/imagen`,{
+        method:"PUT",
+        headers:{ "Content-Type":"application/json"},
+        body:JSON.stringify({ imagen_url })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok){
+        alert(data.error || "No se pudo actualizar la foto");
+        return;
+    }
+
+    buscarMaterial();
+}catch(error){
+    alert(error.message || "No se pudo cargar la imagen");
+}
+}
+
+async function quitarFotoMaterial(id){
+if(!confirm("¿Quitar foto de este material?")) return;
+
+const response = await fetch(`/materiales/${id}/imagen`,{
+    method:"PUT",
+    headers:{ "Content-Type":"application/json"},
+    body:JSON.stringify({ imagen_url: null })
+});
+
+const data = await response.json().catch(() => ({}));
+if(!response.ok){
+    alert(data.error || "No se pudo quitar la foto");
+    return;
+}
+
+buscarMaterial();
+}
+
 /* ================= HERRAMIENTA MODULO ================= */
 
 async function cargarHerramientasModulo(busqueda = ""){
@@ -1015,16 +1510,24 @@ const tabla = document.getElementById("tabla_herramienta_modulo");
 tabla.innerHTML = "";
 
 herramientas.forEach(h => {
-const nombreSeguro = String(h.nombre ?? "").replace(/'/g, "\\'");
-const descripcionSegura = String(h.descripcion ?? "").replace(/'/g, "\\'");
+const nombreData = encodeURIComponent(String(h.nombre ?? ""));
+const descripcionData = encodeURIComponent(String(h.descripcion ?? ""));
 const stockMinimo = Number(h.stock_minimo || 0);
 const precioUnidad = Number(h.precio_por_unidad || 0);
 const totalHerramienta = Number(h.cantidad || 0) * precioUnidad;
 const maximoPorReq = Number(h.maximo_por_requisicion || 1);
 const clase = Number(h.cantidad || 0) <= stockMinimo ? "alerta" : "";
+const imagenHtml = h.imagen_url
+    ? `<button type="button" class="miniatura-boton" onclick="abrirVistaImagenDesdeBoton(this)" data-src="${encodeURIComponent(String(h.imagen_url || ""))}" data-titulo="${encodeURIComponent(String(h.nombre || "Herramienta"))}"><img src="${h.imagen_url}" alt="Imagen herramienta" class="miniatura-inventario"></button>`
+    : `<span class="sin-imagen">-</span>`;
+const opcionFotoTexto = h.imagen_url ? "Cambiar foto" : "Subir foto";
+const botonQuitarFoto = h.imagen_url
+    ? `<button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'quitar_foto')">Quitar foto</button>`
+    : "";
 
 tabla.innerHTML += `
 <tr class="${clase}">
+<td class="col-imagen">${imagenHtml}</td>
 <td>${h.nombre}</td>
 <td>${h.descripcion || "-"}</td>
 <td>
@@ -1039,9 +1542,23 @@ ${h.cantidad}
 <button onclick="sumarCantidadHerramientaModulo(${h.id})">+</button>
 </td>
 <td>
-    <div class="acciones-linea">
-        <button onclick="editarHerramientaModulo(${h.id}, '${nombreSeguro}', '${descripcionSegura}', ${h.cantidad}, ${stockMinimo}, ${precioUnidad}, ${maximoPorReq})">Editar</button>
-        <button onclick="eliminarHerramientaModulo(${h.id})">Eliminar</button>
+    <div
+        class="acciones-menu"
+        data-tipo-item="herramienta_modulo"
+        data-id="${h.id}"
+        data-nombre="${nombreData}"
+        data-descripcion="${descripcionData}"
+        data-cantidad="${Number(h.cantidad || 0)}"
+        data-stock-minimo="${stockMinimo}"
+        data-precio-unidad="${precioUnidad}"
+        data-maximo-req="${maximoPorReq}">
+        <button type="button" class="acciones-menu-toggle" onclick="toggleMenuAcciones(event, this)">Acciones</button>
+        <div class="acciones-menu-lista">
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'subir_foto')">${opcionFotoTexto}</button>
+            ${botonQuitarFoto}
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'editar')">Editar</button>
+            <button type="button" class="acciones-menu-item" onclick="ejecutarAccionMenu(event, this, 'eliminar')">Eliminar</button>
+        </div>
     </div>
 </td>
 </tr>`;
@@ -1054,6 +1571,14 @@ cargarHerramientasModulo(texto);
 }
 
 async function agregarHerramientaModulo(){
+let imagen_url = null;
+try{
+imagen_url = await obtenerImagenDesdeInput("imagen_herramienta_modulo");
+}catch(error){
+alert(error.message || "Imagen invalida");
+return;
+}
+
 const nombre = document.getElementById("nombre_herramienta_modulo").value.trim();
 const descripcion = document.getElementById("descripcion_herramienta_modulo").value.trim();
 const cantidad = parseInt(document.getElementById("cantidad_herramienta_modulo").value, 10);
@@ -1085,12 +1610,12 @@ return;
 const response = await fetch("/herramienta-modulo", {
 method:"POST",
 headers:{ "Content-Type":"application/json" },
-body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion })
+body: JSON.stringify({ nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url })
 });
 
 if(!response.ok){
 const data = await response.json().catch(() => ({}));
-alert(data.error || "Error al agregar herramienta");
+alert(data.error || `No se pudo agregar herramienta (HTTP ${response.status})`);
 return;
 }
 
@@ -1100,6 +1625,7 @@ document.getElementById("cantidad_herramienta_modulo").value = "";
 document.getElementById("stock_minimo_herramienta_modulo").value = "";
 document.getElementById("maximo_por_requisicion_herramienta_modulo").value = "1";
 document.getElementById("precio_herramienta_modulo").value = "";
+document.getElementById("imagen_herramienta_modulo").value = "";
 
 cargarHerramientasModulo();
 }
@@ -1184,6 +1710,47 @@ return;
 }
 
 cargarHerramientasModulo();
+}
+
+async function subirFotoHerramientaModulo(id){
+try{
+    const imagen_url = await seleccionarImagenDesdeDialogo();
+    if(!imagen_url) return;
+
+    const response = await fetch(`/herramienta-modulo/${id}/imagen`, {
+        method:"PUT",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ imagen_url })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if(!response.ok){
+        alert(data.error || "No se pudo actualizar la foto");
+        return;
+    }
+
+    buscarHerramientaModulo();
+}catch(error){
+    alert(error.message || "No se pudo cargar la imagen");
+}
+}
+
+async function quitarFotoHerramientaModulo(id){
+if(!confirm("¿Quitar foto de esta herramienta?")) return;
+
+const response = await fetch(`/herramienta-modulo/${id}/imagen`, {
+    method:"PUT",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ imagen_url: null })
+});
+
+const data = await response.json().catch(() => ({}));
+if(!response.ok){
+    alert(data.error || "No se pudo quitar la foto");
+    return;
+}
+
+buscarHerramientaModulo();
 }
 
 async function eliminarHerramientaModulo(id){
@@ -1373,47 +1940,259 @@ fila.style.display=texto.includes(filtro) ? "" : "none";
 async function cargarSolicitudes(){
 
     const tabla = document.getElementById("tabla_solicitudes");
-    tabla.innerHTML = "";
+    const contenedorMaterial = document.getElementById("solicitudes_material_pendientes");
+    if (tabla && !tabla.innerHTML.trim()) {
+        actualizarHtmlSinParpadeoAdmin(tabla, `<tr><td colspan="5">Cargando...</td></tr>`);
+    }
+    if (contenedorMaterial && !contenedorMaterial.innerHTML.trim()) {
+        actualizarHtmlSinParpadeoAdmin(contenedorMaterial, "<p style='margin:0;'>Cargando...</p>");
+    }
 
-    // ðŸ”µ Solicitudes nuevas
-    const resPendientes = await fetch("/asignaciones/pendientes");
-    const pendientes = await resPendientes.json();
+    try {
+        const [resPendientes, resDev, resMaterial] = await Promise.all([
+            fetch("/asignaciones/pendientes"),
+            fetch("/asignaciones/devoluciones-pendientes"),
+            fetch("/requisiciones-pendientes-admin")
+        ]);
 
-    pendientes.forEach(s=>{
-        tabla.innerHTML+=`
-        <tr>
-            <td>${s.tecnico}</td>
-            <td>${s.equipo}</td>
-            <td>${s.linea}</td>
-            <td>${new Date(s.fecha_solicitud).toLocaleString()}</td>
-            <td>
-                <button onclick="aprobarSolicitud(${s.id})">Aprobar</button>
-                <button onclick="rechazarSolicitud(${s.id})">Rechazar</button>
-            </td>
-        </tr>`;
+        const pendientes = await resPendientes.json().catch(() => []);
+        const devoluciones = await resDev.json().catch(() => []);
+        const requisicionesMaterial = await resMaterial.json().catch(() => []);
+
+        if (tabla) {
+            const filasPendientes = pendientes.map((s) => `
+                <tr>
+                    <td>${s.tecnico}</td>
+                    <td>${s.equipo}</td>
+                    <td>${s.linea}</td>
+                    <td>${new Date(s.fecha_solicitud).toLocaleString()}</td>
+                    <td>
+                        <button onclick="aprobarSolicitud(${s.id})">Aprobar</button>
+                        <button onclick="rechazarSolicitud(${s.id})">Rechazar</button>
+                    </td>
+                </tr>
+            `);
+
+            const filasDevoluciones = devoluciones.map((s) => `
+                <tr style="background:#fff3cd;">
+                    <td>${s.tecnico}</td>
+                    <td>${s.equipo}</td>
+                    <td>${s.linea}</td>
+                    <td>Pendiente devolucion</td>
+                    <td>
+                        <button onclick="aprobarDevolucion(${s.id})">
+                            Aprobar devolucion
+                        </button>
+                        <button onclick="rechazarDevolucion(${s.id})">
+                            Rechazar devolucion
+                        </button>
+                    </td>
+                </tr>
+            `);
+
+            let htmlTabla = "";
+            if ((pendientes.length + devoluciones.length) === 0) {
+                htmlTabla = `<tr><td colspan="5">Sin solicitudes pendientes</td></tr>`;
+            } else {
+                htmlTabla = [...filasPendientes, ...filasDevoluciones].join("");
+            }
+            actualizarHtmlSinParpadeoAdmin(tabla, htmlTabla);
+        }
+
+        if (!resMaterial.ok) {
+            if (contenedorMaterial) {
+                actualizarHtmlSinParpadeoAdmin(
+                    contenedorMaterial,
+                    `<p style="margin:0;">No se pudo cargar requisiciones tipo nuevo (HTTP ${resMaterial.status}). Reinicia el servidor.</p>`
+                );
+            }
+            return;
+        }
+
+        renderSolicitudesMaterialPendientes(requisicionesMaterial);
+    } catch (error) {
+        console.error(error);
+        if (tabla) {
+            actualizarHtmlSinParpadeoAdmin(tabla, `<tr><td colspan="5">Error al cargar solicitudes</td></tr>`);
+        }
+        if (contenedorMaterial) {
+            actualizarHtmlSinParpadeoAdmin(contenedorMaterial, `<p style="margin:0;">Error al cargar requisiciones pendientes de aprobacion.</p>`);
+        }
+    }
+}
+
+function formatearTipoMovimientoSolicitud(tipo){
+    const map = {
+        nuevo: "Nuevo",
+        cambio: "Cambio",
+        retorno: "Retorno"
+    };
+    const key = String(tipo || "").trim().toLowerCase();
+    return map[key] || (tipo || "-");
+}
+
+function formatearTipoOrigenSolicitud(tipo){
+    const key = String(tipo || "").trim().toLowerCase();
+    if (key === "modulo") return "Modulo";
+    return "Ensamble";
+}
+
+function renderSolicitudesMaterialPendientes(data){
+    const contenedor = document.getElementById("solicitudes_material_pendientes");
+    if (!contenedor) return;
+
+    if (!Array.isArray(data) || data.length === 0) {
+        actualizarHtmlSinParpadeoAdmin(contenedor, `<p style="margin:0;">Sin requisiciones de material pendientes por aprobar.</p>`);
+        return;
+    }
+
+    const agrupadas = {};
+    data.forEach(item => {
+        const reqId = Number(item.requisicion_id);
+        if (!agrupadas[reqId]) {
+            agrupadas[reqId] = {
+                info: item,
+                detalles: []
+            };
+        }
+        agrupadas[reqId].detalles.push(item);
     });
 
-    // ðŸŸ¡ Devoluciones pendientes
-    const resDev = await fetch("/asignaciones/devoluciones-pendientes");
-    const devoluciones = await resDev.json();
+    const html = Object.keys(agrupadas)
+        .sort((a, b) => Number(b) - Number(a))
+        .map((reqId) => {
+            const req = agrupadas[reqId];
+            const filas = req.detalles.map((det) => `
+                <tr>
+                    <td>${det.material || "-"}</td>
+                    <td>${formatearTipoMovimientoSolicitud(det.tipo_movimiento)}</td>
+                    <td>${det.cantidad_solicitada || 0}</td>
+                    <td>
+                        <div class="acciones-linea">
+                            <button onclick="aprobarDetalleNuevoAdmin(${det.detalle_id}, '${det.detalle_tipo}')">Aprobar</button>
+                            <button onclick="rechazarDetalleNuevoAdmin(${det.detalle_id}, '${det.detalle_tipo}')">Rechazar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
 
-    devoluciones.forEach(s=>{
-        tabla.innerHTML+=`
-        <tr style="background:#fff3cd;">
-            <td>${s.tecnico}</td>
-            <td>${s.equipo}</td>
-            <td>${s.linea}</td>
-            <td>Pendiente devolucion</td>
-                        <td>
-                <button onclick="aprobarDevolucion(${s.id})">
-                    Aprobar devolucion
-                </button>
-                <button onclick="rechazarDevolucion(${s.id})">
-                    Rechazar devolucion
-                </button>
-            </td>
-        </tr>`;
-    });
+            return `
+                <div class="card" style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        <h4 style="margin:0;">Requisicion #${reqId}</h4>
+                        <span style="font-size:.9rem; opacity:.8;">Pendientes tipo nuevo: ${req.detalles.length}</span>
+                    </div>
+                    <p><strong>Solicitante:</strong> ${req.info.solicitante || "-"} (${req.info.numero_id || "-"})</p>
+                    <p><strong>Linea:</strong> ${req.info.linea_nombre || "-"}</p>
+                    <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+                    <p><strong>Seccion:</strong> ${formatearTipoOrigenSolicitud(req.info.tipo_origen)}</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Tipo movimiento</th>
+                                <th>Cantidad</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>
+            `;
+        })
+        .join("");
+
+    actualizarHtmlSinParpadeoAdmin(contenedor, html);
+}
+
+async function aprobarDetalleNuevoAdmin(detalleId, detalleTipo){
+    if (!confirm("Esta accion aprobara este material tipo nuevo. Deseas continuar?")) return;
+
+    const response = await fetch(
+        `/requisiciones-detalle/${detalleId}/aprobar-admin`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                usuario_admin_id: usuarioAuth?.id,
+                detalle_tipo: detalleTipo
+            })
+        }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "Error al aprobar material nuevo");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+async function rechazarDetalleNuevoAdmin(detalleId, detalleTipo){
+    if (!confirm("Esta accion rechazara este material tipo nuevo. Deseas continuar?")) return;
+
+    const response = await fetch(
+        `/requisiciones-detalle/${detalleId}/rechazar-admin`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                usuario_admin_id: usuarioAuth?.id,
+                detalle_tipo: detalleTipo
+            })
+        }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "Error al rechazar material nuevo");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+async function aprobarRequisicionNuevo(requisicionId){
+    if (!confirm("Esta accion aprobara la requisicion nueva. Deseas continuar?")) return;
+
+    const response = await fetch(
+        `/requisiciones/${requisicionId}/aprobar-admin`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario_admin_id: usuarioAuth?.id })
+        }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "Error al aprobar requisicion");
+        return;
+    }
+
+    cargarSolicitudes();
+}
+
+async function rechazarRequisicionNuevo(requisicionId){
+    if (!confirm("Esta accion rechazara la requisicion nueva. Deseas continuar?")) return;
+
+    const response = await fetch(
+        `/requisiciones/${requisicionId}/rechazar-admin`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usuario_admin_id: usuarioAuth?.id })
+        }
+    );
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "Error al rechazar requisicion");
+        return;
+    }
+
+    cargarSolicitudes();
 }
 
 async function aprobarSolicitud(id){
@@ -1902,6 +2681,10 @@ function toggleLogoutMenu(event){
 function cerrarSesion(){
     localStorage.removeItem("usuario");
     localStorage.removeItem("token");
+    localStorage.removeItem("sesion_timeout_ms");
+    localStorage.removeItem("sesion_inicia_en");
+    localStorage.removeItem("sesion_expira_en");
+    localStorage.removeItem("sesion_rol");
     window.location.href = "login.html";
 }
 
@@ -1924,7 +2707,48 @@ document.addEventListener("click", (e) => {
     }
 });
 
-const usuarioAuth = JSON.parse(localStorage.getItem("usuario"));
+const DURACION_SESION_MS = 10 * 60 * 1000;
+const ROLES_SESION_CORTA = new Set(["admin", "supervisor", "tecnico", "empleado"]);
+let redirigiendoPorSesionExpirada = false;
+
+function validarSesionActivaConLimite(usuarioActual){
+    if (!usuarioActual) return false;
+    const rol = String(usuarioActual.rol || "").toLowerCase();
+    if (!ROLES_SESION_CORTA.has(rol)) return true;
+
+    const rolSesion = String(localStorage.getItem("sesion_rol") || "").toLowerCase();
+    let expiraEn = Number(localStorage.getItem("sesion_expira_en"));
+
+    if (rolSesion !== rol || !Number.isFinite(expiraEn) || expiraEn <= 0) {
+        const ahora = Date.now();
+        expiraEn = ahora + DURACION_SESION_MS;
+        localStorage.setItem("sesion_timeout_ms", String(DURACION_SESION_MS));
+        localStorage.setItem("sesion_inicia_en", String(ahora));
+        localStorage.setItem("sesion_expira_en", String(expiraEn));
+        localStorage.setItem("sesion_rol", rol);
+    }
+
+    if (Date.now() >= expiraEn) {
+        if (redirigiendoPorSesionExpirada) return false;
+        redirigiendoPorSesionExpirada = true;
+        localStorage.removeItem("usuario");
+        localStorage.removeItem("token");
+        localStorage.removeItem("sesion_timeout_ms");
+        localStorage.removeItem("sesion_inicia_en");
+        localStorage.removeItem("sesion_expira_en");
+        localStorage.removeItem("sesion_rol");
+        alert("Tu sesion expiro (10 minutos). Inicia sesion nuevamente.");
+        window.location.href = "login.html";
+        return false;
+    }
+
+    return true;
+}
+
+let usuarioAuth = JSON.parse(localStorage.getItem("usuario"));
+if (usuarioAuth && !validarSesionActivaConLimite(usuarioAuth)) {
+    usuarioAuth = null;
+}
 if (!usuarioAuth || usuarioAuth.rol !== "admin") {
     alert("Acceso no autorizado");
     window.location.href = "login.html";
@@ -2019,8 +2843,14 @@ cargarEquiposAdmin();
 cargarSolicitudes();
 cargarMaterialPorLinea();
 
+setInterval(() => {
+    const usuarioSesion = JSON.parse(localStorage.getItem("usuario") || "null");
+    validarSesionActivaConLimite(usuarioSesion);
+}, 10000);
+
 
 setInterval(() => {
+    if (document.hidden) return;
     if (estaEditandoFormulario()) return;
     refrescarSeccionActivaAdmin();
 }, 5000);

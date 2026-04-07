@@ -4,10 +4,12 @@ const { Pool } = require("pg");
 const cors = require("cors");
 const XLSX = require("xlsx");
 const XLSXStyle = require("xlsx-js-style");
+const ExcelJS = require("exceljs");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 app.use(express.static("public"));
 
 const PASS_COL = "\"contrase\u00f1a\"";
@@ -52,6 +54,96 @@ function generarBufferInventarioConAlerta(rows, nombreHoja, campoCantidad) {
     }
 
     return XLSXStyle.write(workbook, { type: "buffer", bookType: "xlsx" });
+}
+
+function obtenerImagenExcelDesdeDataUrl(valor) {
+    if (typeof valor !== "string") return null;
+    const limpio = valor.trim();
+    if (!limpio.startsWith("data:image/") || !limpio.includes(";base64,")) return null;
+
+    const match = limpio.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) return null;
+
+    const mime = String(match[1] || "").toLowerCase();
+    const base64 = match[2] || "";
+    if (!base64) return null;
+
+    let extension = null;
+    if (mime === "image/png") extension = "png";
+    else if (mime === "image/jpeg" || mime === "image/jpg") extension = "jpeg";
+    else if (mime === "image/gif") extension = "gif";
+    if (!extension) return null;
+
+    try {
+        const buffer = Buffer.from(base64, "base64");
+        if (!buffer.length) return null;
+        return { buffer, extension };
+    } catch (_) {
+        return null;
+    }
+}
+
+async function generarBufferInventarioConImagenes(rows, nombreHoja, campoCantidad, campoImagen = "imagen") {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(nombreHoja);
+    const columnas = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+    worksheet.columns = columnas.map((columna) => {
+        if (columna === campoImagen) return { header: "imagen", key: columna, width: 14 };
+        return { header: columna, key: columna, width: 18 };
+    });
+
+    rows.forEach((row) => worksheet.addRow(row));
+
+    const indiceColumnaImagen = columnas.indexOf(campoImagen) + 1;
+
+    rows.forEach((row, index) => {
+        const filaExcel = index + 2;
+        const cantidad = Number(row[campoCantidad] ?? 0);
+        const stockMinimo = Number(row.stock_minimo ?? 0);
+
+        if (Number.isFinite(cantidad) && Number.isFinite(stockMinimo) && cantidad <= stockMinimo) {
+            columnas.forEach((_, colIndex) => {
+                const cell = worksheet.getCell(filaExcel, colIndex + 1);
+                cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFF8D7DA" }
+                };
+                cell.font = {
+                    color: { argb: "FFB91C1C" },
+                    bold: true
+                };
+            });
+        }
+
+        if (indiceColumnaImagen <= 0) return;
+
+        const dataUrl = row[campoImagen];
+        const imagen = obtenerImagenExcelDesdeDataUrl(dataUrl);
+        const celdaImagen = worksheet.getCell(filaExcel, indiceColumnaImagen);
+        celdaImagen.alignment = { vertical: "middle", horizontal: "center" };
+
+        if (!imagen) {
+            celdaImagen.value = dataUrl ? "No compatible" : "-";
+            return;
+        }
+
+        const imageId = workbook.addImage({
+            buffer: imagen.buffer,
+            extension: imagen.extension
+        });
+
+        worksheet.getRow(filaExcel).height = 38;
+        celdaImagen.value = "";
+        worksheet.addImage(imageId, {
+            tl: { col: indiceColumnaImagen - 1 + 0.1, row: filaExcel - 1 + 0.1 },
+            ext: { width: 36, height: 36 }
+        });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
 }
 
 async function asegurarIntegridadAsignaciones() {
@@ -145,6 +237,38 @@ async function asegurarEstructuraRequisiciones() {
                 CHECK (LOWER(tipo_movimiento) IN ('nuevo', 'cambio', 'retorno'));
             END IF;
         END $$;
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS aprobado_supervisor BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS aprobado_supervisor BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    // Backfill para no bloquear historicos ya entregados y cambios/retornos.
+    await pool.query(`
+        UPDATE detalle_requisicion
+        SET aprobado_supervisor = TRUE
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) <> 'nuevo'
+           OR COALESCE(cantidad_entregada, 0) > 0
+    `);
+
+    await pool.query(`
+        UPDATE detalle_requisicion_modulo
+        SET aprobado_supervisor = TRUE
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) <> 'nuevo'
+           OR COALESCE(cantidad_entregada, 0) > 0
+    `);
+
+    // La regla nueva elimina el estado pendiente_admin de requisiciones previas.
+    await pool.query(`
+        UPDATE requisiciones
+        SET estado_general = 'aprobada'
+        WHERE COALESCE(estado_general, '') = 'pendiente_admin'
     `);
 }
 async function asegurarEstadoUsuarios() {
@@ -279,6 +403,11 @@ async function asegurarEstructuraHerramientaModulo() {
     `);
 
     await pool.query(`
+        ALTER TABLE materiales
+        ADD COLUMN IF NOT EXISTS imagen_url TEXT
+    `);
+
+    await pool.query(`
         UPDATE materiales
         SET maximo_por_requisicion = 1
         WHERE maximo_por_requisicion IS NULL OR maximo_por_requisicion < 1
@@ -311,6 +440,11 @@ async function asegurarEstructuraHerramientaModulo() {
     await pool.query(`
         ALTER TABLE herramienta_modulo
         ADD COLUMN IF NOT EXISTS maximo_por_requisicion INTEGER DEFAULT 1
+    `);
+
+    await pool.query(`
+        ALTER TABLE herramienta_modulo
+        ADD COLUMN IF NOT EXISTS imagen_url TEXT
     `);
 
     await pool.query(`
@@ -378,6 +512,25 @@ function obtenerTurnoActualTijuana() {
     const hh = String(ahoraTj.getHours()).padStart(2, "0");
     const mm = String(ahoraTj.getMinutes()).padStart(2, "0");
     return calcularTurnoPorHora(`${hh}:${mm}`);
+}
+
+function normalizarImagenDataUrl(valor) {
+    if (valor == null) return { value: null };
+    if (typeof valor !== "string") return { error: "Formato de imagen invalido" };
+
+    const limpio = valor.trim();
+    if (!limpio) return { value: null };
+
+    if (!limpio.startsWith("data:image/") || !limpio.includes(";base64,")) {
+        return { error: "La imagen debe estar en formato valido" };
+    }
+
+    const maxBytes = 5 * 1024 * 1024;
+    if (Buffer.byteLength(limpio, "utf8") > maxBytes) {
+        return { error: "La imagen excede el limite permitido (5MB)" };
+    }
+
+    return { value: limpio };
 }
 
 function normalizarTurno(turno) {
@@ -718,7 +871,7 @@ app.delete("/horarios-login/:id", async (req, res) => {
 ///////Agregar Materiales - PestaÃ±a ///////// 
 app.post("/materiales", async (req, res) => {
 
-    const { nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion } = req.body;
+    const { nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion, imagen_url } = req.body;
 
     if (!nombre || !tipo || cantidad_stock == null || stock_minimo == null || precio_unitario == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -732,6 +885,11 @@ app.post("/materiales", async (req, res) => {
     if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
         return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+    const imagenDataUrl = imagenNormalizada.value;
 
     try {
 
@@ -750,10 +908,11 @@ app.post("/materiales", async (req, res) => {
                  SET cantidad_stock = cantidad_stock + $1,
                      precio_unitario = $4,
                      stock_minimo = $5,
-                     maximo_por_requisicion = $6
+                     maximo_por_requisicion = $6,
+                     imagen_url = COALESCE($7, imagen_url)
                  WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($2))
                  AND tipo = $3`,
-                [cantidad_stock, nombre, tipo, Number(precio_unitario), parseInt(stock_minimo, 10), maximoPorReqNum]
+                [cantidad_stock, nombre, tipo, Number(precio_unitario), parseInt(stock_minimo, 10), maximoPorReqNum, imagenDataUrl]
             );
 
             return res.json({ success: true, message: "Stock actualizado" });
@@ -762,9 +921,9 @@ app.post("/materiales", async (req, res) => {
 
             await pool.query(
                 `INSERT INTO materiales
-                (nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion)
-                VALUES ($1, $2, $3, $4, $5, $6)`,
-                [nombre.trim(), tipo, cantidad_stock, stock_minimo, Number(precio_unitario), maximoPorReqNum]
+                (nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion, imagen_url)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [nombre.trim(), tipo, cantidad_stock, stock_minimo, Number(precio_unitario), maximoPorReqNum, imagenDataUrl]
             );
 
             return res.json({ success: true, message: "Material creado" });
@@ -777,7 +936,7 @@ app.post("/materiales", async (req, res) => {
 });
 app.put("/materiales/:id", async (req, res) => {
     const { id } = req.params;
-    const { nombre, tipo, stock_minimo, precio_unitario, cantidad_stock, maximo_por_requisicion } = req.body;
+    const { nombre, tipo, stock_minimo, precio_unitario, cantidad_stock, maximo_por_requisicion, imagen_url } = req.body;
 
     if (!nombre || !tipo || stock_minimo == null || precio_unitario == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -797,6 +956,11 @@ app.put("/materiales/:id", async (req, res) => {
     if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
         return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+    const imagenDataUrl = imagenNormalizada.value;
     let cantidadStockNum = null;
     if (cantidad_stock != null) {
         cantidadStockNum = parseInt(cantidad_stock, 10);
@@ -813,10 +977,11 @@ app.put("/materiales/:id", async (req, res) => {
                  stock_minimo = $3,
                  precio_unitario = $4,
                  cantidad_stock = COALESCE($5, cantidad_stock),
-                 maximo_por_requisicion = $6
-             WHERE id = $7
-             RETURNING id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion`,
-            [nombre.trim(), tipo, parseInt(stock_minimo, 10), Number(precio_unitario), cantidadStockNum, maximoPorReqNum, id]
+                 maximo_por_requisicion = $6,
+                 imagen_url = COALESCE($7, imagen_url)
+             WHERE id = $8
+             RETURNING id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion, imagen_url`,
+            [nombre.trim(), tipo, parseInt(stock_minimo, 10), Number(precio_unitario), cantidadStockNum, maximoPorReqNum, imagenDataUrl, id]
         );
 
         if (result.rowCount === 0) {
@@ -828,6 +993,35 @@ app.put("/materiales/:id", async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al editar material" });
+    }
+});
+
+app.put("/materiales/:id/imagen", async (req, res) => {
+    const { id } = req.params;
+    const { imagen_url } = req.body;
+
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE materiales
+             SET imagen_url = $1
+             WHERE id = $2
+             RETURNING id, nombre, imagen_url`,
+            [imagenNormalizada.value, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Material no encontrado" });
+        }
+
+        res.json({ success: true, material: result.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al actualizar imagen del material" });
     }
 });
 // Modificar stock manualmente (Solo enteros)
@@ -895,7 +1089,7 @@ app.get("/materiales", async (req, res) => {
         const { buscar, tipo } = req.query;
 
         let query = `
-            SELECT id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion
+            SELECT id, nombre, tipo, cantidad_stock, stock_minimo, precio_unitario, maximo_por_requisicion, imagen_url
             FROM materiales
         `;
 
@@ -976,7 +1170,7 @@ app.get("/herramienta-modulo", async (req, res) => {
         const { buscar } = req.query;
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
 
-        let query = `SELECT id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion FROM herramienta_modulo`;
+        let query = `SELECT id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url FROM herramienta_modulo`;
         const values = [];
 
         if (buscar) {
@@ -995,7 +1189,7 @@ app.get("/herramienta-modulo", async (req, res) => {
 });
 
 app.post("/herramienta-modulo", async (req, res) => {
-    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion } = req.body;
+    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url } = req.body;
 
     if (!nombre || cantidad == null || precio_por_unidad == null || stock_minimo == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -1019,13 +1213,18 @@ app.post("/herramienta-modulo", async (req, res) => {
     if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
         return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+    const imagenDataUrl = imagenNormalizada.value;
 
     try {
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
 
         await pool.query(
-            `INSERT INTO herramienta_modulo (nombre, ${colDesc}, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion) VALUES ($1, $2, $3, $4, $5, $6)`,
-            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum]
+            `INSERT INTO herramienta_modulo (nombre, ${colDesc}, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum, imagenDataUrl]
         );
 
         res.json({ success: true });
@@ -1037,7 +1236,7 @@ app.post("/herramienta-modulo", async (req, res) => {
 
 app.put("/herramienta-modulo/:id", async (req, res) => {
     const { id } = req.params;
-    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion } = req.body;
+    const { nombre, descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url } = req.body;
 
     if (!nombre || cantidad == null || precio_por_unidad == null || stock_minimo == null) {
         return res.status(400).json({ error: "Datos incompletos" });
@@ -1061,6 +1260,11 @@ app.put("/herramienta-modulo/:id", async (req, res) => {
     if (Number.isNaN(maximoPorReqNum) || maximoPorReqNum < 1) {
         return res.status(400).json({ error: "Maximo por requisicion invalido" });
     }
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+    const imagenDataUrl = imagenNormalizada.value;
 
     try {
         const colDesc = await obtenerColumnaDescripcionHerramientaModulo();
@@ -1072,10 +1276,11 @@ app.put("/herramienta-modulo/:id", async (req, res) => {
                  cantidad = $3,
                  stock_minimo = $4,
                  precio_por_unidad = $5,
-                 maximo_por_requisicion = $6
-             WHERE id = $7
-             RETURNING id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion`,
-            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum, id]
+                 maximo_por_requisicion = $6,
+                 imagen_url = COALESCE($7, imagen_url)
+             WHERE id = $8
+             RETURNING id, nombre, ${colDesc} AS descripcion, cantidad, stock_minimo, precio_por_unidad, maximo_por_requisicion, imagen_url`,
+            [nombre.trim(), (descripcion || "").trim() || null, cantidadNum, stockMinimoNum, precioNum, maximoPorReqNum, imagenDataUrl, id]
         );
 
         if (result.rowCount === 0) {
@@ -1086,6 +1291,35 @@ app.put("/herramienta-modulo/:id", async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al editar herramienta de modulo" });
+    }
+});
+
+app.put("/herramienta-modulo/:id/imagen", async (req, res) => {
+    const { id } = req.params;
+    const { imagen_url } = req.body;
+
+    const imagenNormalizada = normalizarImagenDataUrl(imagen_url);
+    if (imagenNormalizada.error) {
+        return res.status(400).json({ error: imagenNormalizada.error });
+    }
+
+    try {
+        const result = await pool.query(
+            `UPDATE herramienta_modulo
+             SET imagen_url = $1
+             WHERE id = $2
+             RETURNING id, nombre, imagen_url`,
+            [imagenNormalizada.value, id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Herramienta no encontrada" });
+        }
+
+        res.json({ success: true, herramienta: result.rows[0] });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al actualizar imagen de herramienta" });
     }
 });
 
@@ -1605,6 +1839,367 @@ app.put("/asignaciones/:id/rechazar-devolucion", async (req, res) => {
         res.status(500).json({ error: "Error al rechazar devolucion" });
     }
 });
+
+app.get("/requisiciones-pendientes-admin", async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                r.id AS requisicion_id,
+                r.fecha,
+                COALESCE(r.tipo_origen, 'ensamble') AS tipo_origen,
+                COALESCE(r.turno, CASE
+                    WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') THEN 'Turno 01'
+                    WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00'
+                       OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
+                    ELSE 'Fuera de turno'
+                END) AS turno,
+                COALESCE(l.nombre, '-') AS linea_nombre,
+                COALESCE(u.nombre, '-') AS solicitante,
+                COALESCE(u.numero_id::text, '-') AS numero_id,
+                d.detalle_id,
+                d.detalle_tipo,
+                d.material,
+                d.estado,
+                d.tipo_movimiento,
+                d.cantidad_solicitada
+            FROM requisiciones r
+            JOIN usuarios u ON r.usuario_id = u.id
+            LEFT JOIN lineas_produccion l ON r.linea_id = l.id
+            JOIN (
+                SELECT
+                    d.requisicion_id,
+                    d.id AS detalle_id,
+                    'ensamble' AS detalle_tipo,
+                    m.nombre AS material,
+                    d.estado,
+                    d.tipo_movimiento,
+                    d.cantidad_solicitada
+                FROM detalle_requisicion d
+                JOIN materiales m ON d.material_id = m.id
+                WHERE LOWER(COALESCE(d.tipo_movimiento, '')) = 'nuevo'
+                  AND COALESCE(d.aprobado_supervisor, FALSE) = FALSE
+                  AND COALESCE(d.estado, '') <> 'rechazada'
+                UNION ALL
+                SELECT
+                    dm.requisicion_id,
+                    dm.id AS detalle_id,
+                    'modulo' AS detalle_tipo,
+                    hm.nombre AS material,
+                    dm.estado,
+                    dm.tipo_movimiento,
+                    dm.cantidad_solicitada
+                FROM detalle_requisicion_modulo dm
+                JOIN herramienta_modulo hm ON dm.herramienta_modulo_id = hm.id
+                WHERE LOWER(COALESCE(dm.tipo_movimiento, '')) = 'nuevo'
+                  AND COALESCE(dm.aprobado_supervisor, FALSE) = FALSE
+                  AND COALESCE(dm.estado, '') <> 'rechazada'
+            ) d ON d.requisicion_id = r.id
+            WHERE COALESCE(r.estado_general, '') NOT IN ('completa', 'rechazada', 'cancelada')
+            ORDER BY r.id DESC, d.material ASC
+        `);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al obtener requisiciones pendientes de aprobacion" });
+    }
+});
+
+app.put("/requisiciones-detalle/:detalle_id/aprobar-admin", async (req, res) => {
+    const { detalle_id } = req.params;
+    const usuarioAdminId = parseInt(req.body?.usuario_admin_id, 10);
+    const detalleTipo = String(req.body?.detalle_tipo || "ensamble").trim().toLowerCase();
+
+    if (!Number.isInteger(usuarioAdminId) || usuarioAdminId <= 0) {
+        return res.status(400).json({ error: "Usuario administrador invalido" });
+    }
+    if (!["ensamble", "modulo"].includes(detalleTipo)) {
+        return res.status(400).json({ error: "Tipo de detalle invalido" });
+    }
+
+    try {
+        const adminResult = await pool.query(
+            "SELECT rol, COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
+            [usuarioAdminId]
+        );
+        if (adminResult.rows.length === 0 || adminResult.rows[0].rol !== "admin") {
+            return res.status(403).json({ error: "Solo administrador puede aprobar" });
+        }
+        if (adminResult.rows[0].activo === false) {
+            return res.status(403).json({ error: "Administrador deshabilitado" });
+        }
+
+        const tabla = detalleTipo === "modulo" ? "detalle_requisicion_modulo" : "detalle_requisicion";
+        const detalleResult = await pool.query(
+            `SELECT id, requisicion_id, COALESCE(tipo_movimiento, '') AS tipo_movimiento, COALESCE(estado, '') AS estado
+             FROM ${tabla}
+             WHERE id = $1`,
+            [detalle_id]
+        );
+
+        if (detalleResult.rows.length === 0) {
+            return res.status(404).json({ error: "Detalle no encontrado" });
+        }
+        const detalle = detalleResult.rows[0];
+        if (String(detalle.tipo_movimiento).toLowerCase() !== "nuevo") {
+            return res.status(400).json({ error: "Solo se puede aprobar material tipo nuevo" });
+        }
+        if (String(detalle.estado).toLowerCase() === "rechazada") {
+            return res.status(400).json({ error: "No se puede aprobar un material ya rechazado" });
+        }
+
+        await pool.query(
+            `UPDATE ${tabla}
+             SET aprobado_supervisor = TRUE
+             WHERE id = $1`,
+            [detalle_id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al aprobar material nuevo" });
+    }
+});
+
+app.put("/requisiciones-detalle/:detalle_id/rechazar-admin", async (req, res) => {
+    const { detalle_id } = req.params;
+    const usuarioAdminId = parseInt(req.body?.usuario_admin_id, 10);
+    const detalleTipo = String(req.body?.detalle_tipo || "ensamble").trim().toLowerCase();
+
+    if (!Number.isInteger(usuarioAdminId) || usuarioAdminId <= 0) {
+        return res.status(400).json({ error: "Usuario administrador invalido" });
+    }
+    if (!["ensamble", "modulo"].includes(detalleTipo)) {
+        return res.status(400).json({ error: "Tipo de detalle invalido" });
+    }
+
+    try {
+        const adminResult = await pool.query(
+            "SELECT rol, COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
+            [usuarioAdminId]
+        );
+        if (adminResult.rows.length === 0 || adminResult.rows[0].rol !== "admin") {
+            return res.status(403).json({ error: "Solo administrador puede rechazar" });
+        }
+        if (adminResult.rows[0].activo === false) {
+            return res.status(403).json({ error: "Administrador deshabilitado" });
+        }
+
+        await pool.query("BEGIN");
+
+        const tabla = detalleTipo === "modulo" ? "detalle_requisicion_modulo" : "detalle_requisicion";
+        const detalleResult = await pool.query(
+            `SELECT id, requisicion_id, COALESCE(tipo_movimiento, '') AS tipo_movimiento, COALESCE(estado, '') AS estado
+             FROM ${tabla}
+             WHERE id = $1
+             FOR UPDATE`,
+            [detalle_id]
+        );
+
+        if (detalleResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Detalle no encontrado" });
+        }
+        const detalle = detalleResult.rows[0];
+        const estadoDetalle = String(detalle.estado || "").toLowerCase();
+        if (String(detalle.tipo_movimiento).toLowerCase() !== "nuevo") {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Solo se puede rechazar material tipo nuevo" });
+        }
+        if (["completa", "parcial"].includes(estadoDetalle)) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "No se puede rechazar un material ya entregado" });
+        }
+
+        await pool.query(
+            `UPDATE ${tabla}
+             SET estado = 'rechazada',
+                 aprobado_supervisor = FALSE
+             WHERE id = $1`,
+            [detalle_id]
+        );
+
+        const reqId = parseInt(detalle.requisicion_id, 10);
+        const estadoReqResult = await pool.query(
+            "SELECT COALESCE(tipo_origen, 'ensamble') AS tipo_origen FROM requisiciones WHERE id = $1",
+            [reqId]
+        );
+        const origenReq = String(estadoReqResult.rows[0]?.tipo_origen || "ensamble").toLowerCase();
+        const tablaReq = origenReq === "modulo" ? "detalle_requisicion_modulo" : "detalle_requisicion";
+
+        const agg = await pool.query(
+            `SELECT
+                COUNT(*) AS total,
+                COUNT(*) FILTER (WHERE COALESCE(estado, '') = 'rechazada') AS rechazadas,
+                COUNT(*) FILTER (WHERE COALESCE(estado, '') = 'completa') AS completas,
+                COUNT(*) FILTER (WHERE COALESCE(estado, '') NOT IN ('completa', 'rechazada')) AS pendientes
+             FROM ${tablaReq}
+             WHERE requisicion_id = $1`,
+            [reqId]
+        );
+
+        const total = parseInt(agg.rows[0]?.total, 10) || 0;
+        const rechazadas = parseInt(agg.rows[0]?.rechazadas, 10) || 0;
+        const completas = parseInt(agg.rows[0]?.completas, 10) || 0;
+        const pendientes = parseInt(agg.rows[0]?.pendientes, 10) || 0;
+
+        let nuevoEstadoGeneral = "aprobada";
+        if (pendientes === 0) {
+            if (rechazadas === total && total > 0) {
+                nuevoEstadoGeneral = "rechazada";
+            } else {
+                nuevoEstadoGeneral = "completa";
+            }
+        } else if (completas > 0 || rechazadas > 0) {
+            nuevoEstadoGeneral = "parcial";
+        }
+
+        await pool.query(
+            "UPDATE requisiciones SET estado_general = $1 WHERE id = $2",
+            [nuevoEstadoGeneral, reqId]
+        );
+
+        await pool.query("COMMIT");
+        res.json({ success: true });
+    } catch (error) {
+        await pool.query("ROLLBACK");
+        console.error(error);
+        res.status(500).json({ error: "Error al rechazar material nuevo" });
+    }
+});
+
+app.put("/requisiciones/:id/aprobar-admin", async (req, res) => {
+    const { id } = req.params;
+    const usuarioAdminId = parseInt(req.body?.usuario_admin_id, 10);
+
+    if (!Number.isInteger(usuarioAdminId) || usuarioAdminId <= 0) {
+        return res.status(400).json({ error: "Usuario administrador invalido" });
+    }
+
+    try {
+        const adminResult = await pool.query(
+            "SELECT rol, COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
+            [usuarioAdminId]
+        );
+
+        if (adminResult.rows.length === 0 || adminResult.rows[0].rol !== "admin") {
+            return res.status(403).json({ error: "Solo el administrador puede aprobar requisiciones nuevas" });
+        }
+        if (adminResult.rows[0].activo === false) {
+            return res.status(403).json({ error: "Administrador deshabilitado" });
+        }
+
+        await pool.query("BEGIN");
+
+        const reqResult = await pool.query(
+            `SELECT id, COALESCE(estado_general, '') AS estado_general
+             FROM requisiciones
+             WHERE id = $1
+             FOR UPDATE`,
+            [id]
+        );
+        if (reqResult.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+
+        const estadoActual = String(reqResult.rows[0].estado_general || "").toLowerCase();
+        if (["completa", "rechazada", "cancelada"].includes(estadoActual)) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "La requisicion ya esta cerrada" });
+        }
+
+        const updEns = await pool.query(
+            `UPDATE detalle_requisicion
+             SET aprobado_supervisor = TRUE
+             WHERE requisicion_id = $1
+               AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
+               AND COALESCE(aprobado_supervisor, FALSE) = FALSE
+               AND COALESCE(estado, '') <> 'rechazada'`,
+            [id]
+        );
+        const updMod = await pool.query(
+            `UPDATE detalle_requisicion_modulo
+             SET aprobado_supervisor = TRUE
+             WHERE requisicion_id = $1
+               AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
+               AND COALESCE(aprobado_supervisor, FALSE) = FALSE
+               AND COALESCE(estado, '') <> 'rechazada'`,
+            [id]
+        );
+
+        const totalAprobados = Number(updEns.rowCount || 0) + Number(updMod.rowCount || 0);
+        if (totalAprobados <= 0) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "No hay materiales tipo nuevo pendientes de aprobar en esta requisicion" });
+        }
+
+        if (estadoActual === "pendiente_admin") {
+            await pool.query(
+                "UPDATE requisiciones SET estado_general = 'aprobada' WHERE id = $1",
+                [id]
+            );
+        }
+
+        await pool.query("COMMIT");
+        res.json({ success: true, aprobados: totalAprobados });
+    } catch (error) {
+        await pool.query("ROLLBACK");
+        console.error(error);
+        res.status(500).json({ error: "Error al aprobar requisicion" });
+    }
+});
+
+app.put("/requisiciones/:id/rechazar-admin", async (req, res) => {
+    const { id } = req.params;
+    const usuarioAdminId = parseInt(req.body?.usuario_admin_id, 10);
+
+    if (!Number.isInteger(usuarioAdminId) || usuarioAdminId <= 0) {
+        return res.status(400).json({ error: "Usuario administrador invalido" });
+    }
+
+    try {
+        const adminResult = await pool.query(
+            "SELECT rol, COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
+            [usuarioAdminId]
+        );
+
+        if (adminResult.rows.length === 0 || adminResult.rows[0].rol !== "admin") {
+            return res.status(403).json({ error: "Solo el administrador puede rechazar requisiciones nuevas" });
+        }
+        if (adminResult.rows[0].activo === false) {
+            return res.status(403).json({ error: "Administrador deshabilitado" });
+        }
+
+        const reqResult = await pool.query(
+            `SELECT id, COALESCE(estado_general, '') AS estado_general
+             FROM requisiciones
+             WHERE id = $1`,
+            [id]
+        );
+        if (reqResult.rows.length === 0) {
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+
+        const estadoActual = String(reqResult.rows[0].estado_general || "").toLowerCase();
+        if (["completa", "rechazada", "cancelada"].includes(estadoActual)) {
+            return res.status(400).json({ error: "La requisicion ya esta cerrada" });
+        }
+
+        await pool.query(
+            `UPDATE requisiciones
+             SET estado_general = 'rechazada'
+             WHERE id = $1`,
+            [id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al rechazar requisicion" });
+    }
+});
 ////////Agregar Usuarios - PestaÃ±a///////////
 //Agregar o crear Usuario
 app.post("/usuarios", async (req, res) => {
@@ -1765,6 +2360,7 @@ app.get("/exportar-inventario", async (req, res) => {
         const result = await pool.query(`
             SELECT 
                 m.id,
+                m.imagen_url AS imagen,
                 m.nombre,
                 m.tipo,
                 m.cantidad_stock,
@@ -1779,10 +2375,11 @@ app.get("/exportar-inventario", async (req, res) => {
             ORDER BY m.id ASC
         `);
 
-        const buffer = generarBufferInventarioConAlerta(
+        const buffer = await generarBufferInventarioConImagenes(
             result.rows,
             "Inventario",
-            "cantidad_stock"
+            "cantidad_stock",
+            "imagen"
         );
 
         res.setHeader("Content-Disposition", "attachment; filename=inventario.xlsx");
@@ -1803,6 +2400,7 @@ app.get("/exportar-inventario-herramienta-modulo", async (req, res) => {
         const result = await pool.query(`
             SELECT
                 hm.id,
+                hm.imagen_url AS imagen,
                 hm.nombre,
                 hm.${colDesc} AS descripcion,
                 hm.cantidad,
@@ -1817,10 +2415,11 @@ app.get("/exportar-inventario-herramienta-modulo", async (req, res) => {
             ORDER BY hm.id ASC
         `);
 
-        const buffer = generarBufferInventarioConAlerta(
+        const buffer = await generarBufferInventarioConImagenes(
             result.rows,
             "InvModulo",
-            "cantidad"
+            "cantidad",
+            "imagen"
         );
 
         res.setHeader("Content-Disposition", "attachment; filename=inventario_herramienta_modulo.xlsx");
@@ -2547,7 +3146,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
                 ? "COALESCE(r.estado_general, '') IN ('completa','rechazada')"
                 : "r.estado_general = 'completa'";
         } else {
-            filtroEstado = "COALESCE(r.estado_general, '') NOT IN ('completa','rechazada','cancelada')";
+            filtroEstado = "COALESCE(r.estado_general, '') NOT IN ('completa','rechazada','cancelada','pendiente_admin')";
         }
 
         let filtroMovimiento = "";
@@ -2563,7 +3162,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
                 "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
                 "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
                 "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, hm.nombre AS material, 'modulo' AS tipo, " +
-                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, " +
+                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, " +
                 "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
                 "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
                 "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
@@ -2595,7 +3194,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
             "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
             "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
             "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, m.nombre AS material, m.tipo, " +
-            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, " +
+            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, " +
             "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
             "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
             "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
@@ -2616,6 +3215,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
         res.status(500).json({ error: "Error al obtener requisiciones" });
     }
 });
+
 //Funcion entregar material
 app.post("/entregar-material", async (req, res) => {
 
@@ -2668,8 +3268,23 @@ app.post("/entregar-material", async (req, res) => {
             await pool.query("ROLLBACK");
             return res.status(400).json({ error: "La devolucion fue rechazada y ya no puede procesarse" });
         }
+        if (estadoReq === "pendiente_admin") {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Esta requisicion requiere aprobacion del administrador antes de entregar material" });
+        }
 
         const tipoMovimiento = (det.tipo_movimiento || "nuevo").toLowerCase();
+        const estadoDetalleActual = String(det.estado || "").toLowerCase();
+        if (estadoDetalleActual === "rechazada") {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Este material fue rechazado y ya no puede entregarse" });
+        }
+        if (tipoMovimiento === "nuevo" && det.aprobado_supervisor !== true) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({
+                error: "Este material tipo nuevo debe ser aprobado por supervisor antes de entregarse"
+            });
+        }
         const nuevoEntregado = parseInt(det.cantidad_entregada, 10) + cantidad;
 
         if (nuevoEntregado > det.cantidad_solicitada) {
@@ -2773,12 +3388,12 @@ app.post("/entregar-material", async (req, res) => {
         let check;
         if (tipoDetalle === "modulo") {
             check = await pool.query(
-                "SELECT COUNT(*) FILTER (WHERE estado != 'completa') AS pendientes FROM detalle_requisicion_modulo WHERE requisicion_id = $1",
+                "SELECT COUNT(*) FILTER (WHERE COALESCE(estado, '') NOT IN ('completa','rechazada')) AS pendientes FROM detalle_requisicion_modulo WHERE requisicion_id = $1",
                 [requisicion_id]
             );
         } else {
             check = await pool.query(
-                "SELECT COUNT(*) FILTER (WHERE estado != 'completa') AS pendientes FROM detalle_requisicion WHERE requisicion_id = $1",
+                "SELECT COUNT(*) FILTER (WHERE COALESCE(estado, '') NOT IN ('completa','rechazada')) AS pendientes FROM detalle_requisicion WHERE requisicion_id = $1",
                 [requisicion_id]
             );
         }
@@ -3001,11 +3616,51 @@ app.put("/requisiciones/:id/rechazar", async (req, res) => {
     const { id } = req.params;
 
     try {
+        const reqInfo = await pool.query(
+            "SELECT id, COALESCE(tipo_origen, 'ensamble') AS tipo_origen, COALESCE(estado_general, '') AS estado_general FROM requisiciones WHERE id = $1",
+            [id]
+        );
+        if (reqInfo.rows.length === 0) {
+            return res.status(404).json({ error: "Requisicion no encontrada" });
+        }
+
+        const estadoActual = String(reqInfo.rows[0].estado_general || "").toLowerCase();
+        if (["completa", "rechazada", "cancelada"].includes(estadoActual)) {
+            return res.status(400).json({ error: "La requisicion ya esta cerrada o cancelada" });
+        }
+
+        const esModulo = String(reqInfo.rows[0].tipo_origen || "").toLowerCase() === "modulo";
+        const pendientesNuevo = esModulo
+            ? await pool.query(
+                `SELECT COUNT(*)::INT AS total
+                 FROM detalle_requisicion_modulo
+                 WHERE requisicion_id = $1
+                   AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
+                   AND COALESCE(estado, '') <> 'rechazada'
+                   AND COALESCE(aprobado_supervisor, FALSE) = FALSE`,
+                [id]
+            )
+            : await pool.query(
+                `SELECT COUNT(*)::INT AS total
+                 FROM detalle_requisicion
+                 WHERE requisicion_id = $1
+                   AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
+                   AND COALESCE(estado, '') <> 'rechazada'
+                   AND COALESCE(aprobado_supervisor, FALSE) = FALSE`,
+                [id]
+            );
+
+        if (parseInt(pendientesNuevo.rows[0]?.total, 10) > 0) {
+            return res.status(400).json({
+                error: "No puedes rechazar la requisicion mientras existan materiales tipo nuevo sin aprobar o rechazar"
+            });
+        }
+
         const result = await pool.query(
             `UPDATE requisiciones
              SET estado_general = 'rechazada'
              WHERE id = $1
-               AND COALESCE(estado_general, '') NOT IN ('completa','rechazada','cancelada')
+              AND COALESCE(estado_general, '') NOT IN ('completa','rechazada','cancelada')
              RETURNING id`,
             [id]
         );

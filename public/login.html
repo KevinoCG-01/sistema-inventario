@@ -230,6 +230,22 @@
 
             if (data.success) {
                 localStorage.setItem("usuario", JSON.stringify(data.usuario));
+                const rol = String(data.usuario?.rol || "").toLowerCase();
+                const rolesSesionCorta = new Set(["admin", "supervisor", "tecnico", "empleado"]);
+
+                if (rolesSesionCorta.has(rol)) {
+                    const ahora = Date.now();
+                    const duracionMs = 10 * 60 * 1000;
+                    localStorage.setItem("sesion_timeout_ms", String(duracionMs));
+                    localStorage.setItem("sesion_inicia_en", String(ahora));
+                    localStorage.setItem("sesion_expira_en", String(ahora + duracionMs));
+                    localStorage.setItem("sesion_rol", rol);
+                } else {
+                    localStorage.removeItem("sesion_timeout_ms");
+                    localStorage.removeItem("sesion_inicia_en");
+                    localStorage.removeItem("sesion_expira_en");
+                    localStorage.removeItem("sesion_rol");
+                }
 
                 if (data.usuario.rol === "admin") {
                     window.location.href = "panel_admin.html";
