@@ -4027,19 +4027,51 @@ app.post("/asignaciones/solicitar", async (req, res) => {
     const usuarioId = parseInt(req.body.usuario_id, 10);
     const equipoId = parseInt(req.body.equipo_id, 10);
     const lineaId = parseInt(req.body.linea_id, 10);
+    const equipoValorCrudo = String(req.body.equipo_id ?? "").trim();
+    const lineaValorCrudo = String(req.body.linea_id ?? "").trim();
 
     if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
         return res.status(400).json({ error: "Usuario invalido" });
     }
-    if (!Number.isInteger(equipoId) || equipoId <= 0) {
-        return res.status(400).json({ error: "Equipo invalido" });
-    }
-    if (!Number.isInteger(lineaId) || lineaId <= 0) {
-        return res.status(400).json({ error: "Linea invalida" });
-    }
 
     try {
         await pool.query("BEGIN");
+
+        let equipoIdFinal = equipoId;
+        if (!Number.isInteger(equipoIdFinal) || equipoIdFinal <= 0) {
+            const equipoPorSerie = await pool.query(
+                `SELECT id
+                 FROM equipos_individuales
+                 WHERE numero_serie = $1
+                 LIMIT 1`,
+                [equipoValorCrudo]
+            );
+            if (equipoPorSerie.rows.length > 0) {
+                equipoIdFinal = parseInt(equipoPorSerie.rows[0].id, 10);
+            }
+        }
+        if (!Number.isInteger(equipoIdFinal) || equipoIdFinal <= 0) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Equipo invalido" });
+        }
+
+        let lineaIdFinal = lineaId;
+        if (!Number.isInteger(lineaIdFinal) || lineaIdFinal <= 0) {
+            const lineaPorNombre = await pool.query(
+                `SELECT id
+                 FROM lineas_produccion
+                 WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1))
+                 LIMIT 1`,
+                [lineaValorCrudo]
+            );
+            if (lineaPorNombre.rows.length > 0) {
+                lineaIdFinal = parseInt(lineaPorNombre.rows[0].id, 10);
+            }
+        }
+        if (!Number.isInteger(lineaIdFinal) || lineaIdFinal <= 0) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Linea invalida" });
+        }
 
         const estadoUsuario = await pool.query(
             "SELECT COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
@@ -4072,7 +4104,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              FROM equipos_individuales
              WHERE id = $1
              FOR UPDATE`,
-            [equipoId]
+            [equipoIdFinal]
         );
 
         if (equipo.rows.length === 0) {
@@ -4091,7 +4123,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              WHERE equipo_id = $1
                AND estado IN ('pendiente','aprobado','entregado','pendiente_devolucion')
              LIMIT 1`,
-            [equipoId]
+            [equipoIdFinal]
         );
 
         if (existeEquipo.rows.length > 0) {
@@ -4104,7 +4136,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              FROM lineas_produccion
              WHERE id = $1
              LIMIT 1`,
-            [lineaId]
+            [lineaIdFinal]
         );
 
         if (existeLinea.rows.length === 0) {
@@ -4116,7 +4148,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
             `INSERT INTO asignaciones_equipos
              (usuario_id, equipo_id, linea_id, estado, fecha_solicitud)
              VALUES ($1,$2,$3,'pendiente',CURRENT_TIMESTAMP)`,
-            [usuarioId, equipoId, lineaId]
+            [usuarioId, equipoIdFinal, lineaIdFinal]
         );
 
         await pool.query("COMMIT");
