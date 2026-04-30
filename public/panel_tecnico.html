@@ -26,14 +26,24 @@
             margin-bottom: 15px;
         }
 
-        .activo {
+        .estado-sin-equipo {
             background-color: #d4edda;
             color: #155724;
         }
 
-        .inactivo {
+        .estado-pendiente {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .estado-con-equipo {
             background-color: #f8d7da;
             color: #721c24;
+        }
+
+        .estado-aprobado {
+            background-color: #d1ecf1;
+            color: #0c5460;
         }
     </style>
 </head>
@@ -321,7 +331,7 @@ data.forEach(a => {
 if (data.length === 0) {
 
     estadoDiv.innerText = "🟢 No tienes un equipo activo";
-    estadoDiv.className = "estado-activo inactivo";
+    estadoDiv.className = "estado-activo estado-sin-equipo";
     btnSolicitar.disabled = false;
 
 } else {
@@ -338,18 +348,23 @@ if (data.length === 0) {
 
     if (estadoActual === "pendiente") {
         estadoDiv.innerText = "🟠 Tienes una solicitud pendiente de aprobacion";
+        estadoDiv.className = "estado-activo estado-pendiente";
     }
     else if (estadoActual === "aprobado") {
         estadoDiv.innerText = "🔵 Tu solicitud fue aprobada, ve por el equipo a instrumentacion";
+        estadoDiv.className = "estado-activo estado-aprobado";
     }
     else if (estadoActual === "entregado") {
         estadoDiv.innerText = "🔴 Tienes un equipo activo";
+        estadoDiv.className = "estado-activo estado-con-equipo";
     }
     else if (estadoActual === "pendiente_devolucion") {
         estadoDiv.innerText = "🟠 Tu devolucion esta pendiente de aprobacion";
+        estadoDiv.className = "estado-activo estado-pendiente";
+    } else {
+        estadoDiv.className = "estado-activo estado-sin-equipo";
     }
 
-    estadoDiv.className = "estado-activo activo";
     btnSolicitar.disabled = tieneBloqueo;
 }
 }
@@ -358,8 +373,17 @@ if (data.length === 0) {
 async function procesarAccion() {
 
     const tipo = document.getElementById("tipo_select").value;
-    const equipo_id = document.getElementById("equipo_select").value;
-    const linea_id = document.getElementById("linea_select").value;
+    const equipo_id = Number(document.getElementById("equipo_select").value);
+    const linea_id = Number(document.getElementById("linea_select").value);
+
+    if (!Number.isInteger(equipo_id) || equipo_id <= 0) {
+        alert("Selecciona un equipo valido");
+        return;
+    }
+    if (!Number.isInteger(linea_id) || linea_id <= 0) {
+        alert("Selecciona una linea valida");
+        return;
+    }
 
     if (tipo === "requisicion") {
 
@@ -376,7 +400,7 @@ async function procesarAccion() {
         const data = await response.json();
 
         if (!response.ok) {
-            alert(data.error);
+            alert(data.error || "No se pudo solicitar el equipo");
             return;
         }
 
