@@ -4024,14 +4024,26 @@ app.get("/equipos-disponibles", async (req,res)=>{
 });
 // Tecnico solicita equipo
 app.post("/asignaciones/solicitar", async (req, res) => {
-    const { usuario_id, equipo_id, linea_id } = req.body;
+    const usuarioId = parseInt(req.body.usuario_id, 10);
+    const equipoId = parseInt(req.body.equipo_id, 10);
+    const lineaId = parseInt(req.body.linea_id, 10);
+
+    if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
+        return res.status(400).json({ error: "Usuario invalido" });
+    }
+    if (!Number.isInteger(equipoId) || equipoId <= 0) {
+        return res.status(400).json({ error: "Equipo invalido" });
+    }
+    if (!Number.isInteger(lineaId) || lineaId <= 0) {
+        return res.status(400).json({ error: "Linea invalida" });
+    }
 
     try {
         await pool.query("BEGIN");
 
         const estadoUsuario = await pool.query(
             "SELECT COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
-            [usuario_id]
+            [usuarioId]
         );
 
         if (estadoUsuario.rows.length === 0 || estadoUsuario.rows[0].activo === false) {
@@ -4045,7 +4057,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              WHERE usuario_id = $1
                AND estado IN ('pendiente','aprobado','entregado','pendiente_devolucion')
              LIMIT 1`,
-            [usuario_id]
+            [usuarioId]
         );
 
         if (existeUsuario.rows.length > 0) {
@@ -4060,7 +4072,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              FROM equipos_individuales
              WHERE id = $1
              FOR UPDATE`,
-            [equipo_id]
+            [equipoId]
         );
 
         if (equipo.rows.length === 0) {
@@ -4079,7 +4091,7 @@ app.post("/asignaciones/solicitar", async (req, res) => {
              WHERE equipo_id = $1
                AND estado IN ('pendiente','aprobado','entregado','pendiente_devolucion')
              LIMIT 1`,
-            [equipo_id]
+            [equipoId]
         );
 
         if (existeEquipo.rows.length > 0) {
@@ -4087,11 +4099,24 @@ app.post("/asignaciones/solicitar", async (req, res) => {
             return res.status(400).json({ error: "El equipo ya fue solicitado por otro tecnico" });
         }
 
+        const existeLinea = await pool.query(
+            `SELECT id
+             FROM lineas_produccion
+             WHERE id = $1
+             LIMIT 1`,
+            [lineaId]
+        );
+
+        if (existeLinea.rows.length === 0) {
+            await pool.query("ROLLBACK");
+            return res.status(400).json({ error: "Linea no encontrada" });
+        }
+
         await pool.query(
             `INSERT INTO asignaciones_equipos
              (usuario_id, equipo_id, linea_id, estado, fecha_solicitud)
              VALUES ($1,$2,$3,'pendiente',CURRENT_TIMESTAMP)`,
-            [usuario_id, equipo_id, linea_id]
+            [usuarioId, equipoId, lineaId]
         );
 
         await pool.query("COMMIT");
@@ -4100,6 +4125,12 @@ app.post("/asignaciones/solicitar", async (req, res) => {
     } catch (error) {
         await pool.query("ROLLBACK");
         console.error(error);
+        if (error && error.code === "23505") {
+            return res.status(409).json({ error: "El equipo ya tiene una solicitud activa" });
+        }
+        if (error && error.code === "23503") {
+            return res.status(400).json({ error: "Datos invalidos: revisa usuario, equipo y linea" });
+        }
         res.status(500).json({ error: "Error al solicitar equipo" });
     }
 });

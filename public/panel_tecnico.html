@@ -358,8 +358,17 @@ if (data.length === 0) {
 async function procesarAccion() {
 
     const tipo = document.getElementById("tipo_select").value;
-    const equipo_id = document.getElementById("equipo_select").value;
-    const linea_id = document.getElementById("linea_select").value;
+    const equipo_id = Number(document.getElementById("equipo_select").value);
+    const linea_id = Number(document.getElementById("linea_select").value);
+
+    if (!Number.isInteger(equipo_id) || equipo_id <= 0) {
+        alert("Selecciona un equipo valido");
+        return;
+    }
+    if (!Number.isInteger(linea_id) || linea_id <= 0) {
+        alert("Selecciona una linea valida");
+        return;
+    }
 
     if (tipo === "requisicion") {
 
@@ -376,7 +385,7 @@ async function procesarAccion() {
         const data = await response.json();
 
         if (!response.ok) {
-            alert(data.error);
+            alert(data.error || "No se pudo solicitar el equipo");
             return;
         }
 
