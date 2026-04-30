@@ -154,6 +154,31 @@ async function asegurarIntegridadAsignaciones() {
     `);
 }
 
+async function asegurarSecuenciaAsignaciones() {
+    await pool.query(`
+        CREATE SEQUENCE IF NOT EXISTS asignaciones_equipos_id_seq
+    `);
+
+    await pool.query(`
+        ALTER TABLE asignaciones_equipos
+        ALTER COLUMN id
+        SET DEFAULT nextval('asignaciones_equipos_id_seq')
+    `);
+
+    await pool.query(`
+        ALTER SEQUENCE asignaciones_equipos_id_seq
+        OWNED BY asignaciones_equipos.id
+    `);
+
+    await pool.query(`
+        SELECT setval(
+            'asignaciones_equipos_id_seq',
+            COALESCE((SELECT MAX(id) FROM asignaciones_equipos), 0) + 1,
+            false
+        )
+    `);
+}
+
 async function asegurarEstructuraRequisiciones() {
     await pool.query(`
         ALTER TABLE requisiciones
@@ -4206,6 +4231,7 @@ app.put("/asignaciones/:id/solicitar-devolucion", async (req, res) => {
 ///////////////////////////////////////////
 Promise.all([
     asegurarIntegridadAsignaciones(),
+    asegurarSecuenciaAsignaciones(),
     asegurarEstructuraRequisiciones(),
     asegurarEstructuraRetornosMaterial(),
     asegurarEstadoUsuarios(),
