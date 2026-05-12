@@ -49,6 +49,23 @@
             margin: 0;
             white-space: nowrap;
         }
+
+        .requisicion-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(220px, 1fr));
+            gap: 8px 16px;
+            margin: 8px 0 10px;
+        }
+
+        .requisicion-meta-grid p {
+            margin: 0;
+        }
+
+        @media (max-width: 760px) {
+            .requisicion-meta-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -589,13 +606,15 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
                 <h3 style="margin:0;">Requisicion #${reqId}</h3>
                 ${botonRechazarReq}
             </div>
-            <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
-            <p><strong>Linea:</strong> ${lineaTexto}</p>
-            <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
-            <p><strong>Fecha envio:</strong> ${fechaEnvio}</p>
-            <p><strong>Hora envio:</strong> ${horaEnvio}</p>
-            <p><strong>Estado:</strong> ${req.info.estado_general}</p>
-            <p><strong>Tipo movimiento:</strong> ${tiposTexto}</p>
+            <div class="requisicion-meta-grid">
+                <p><strong>Solicitante:</strong> ${req.info.nombre}</p>
+                <p><strong>Linea:</strong> ${lineaTexto}</p>
+                <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+                <p><strong>Fecha envio:</strong> ${fechaEnvio}</p>
+                <p><strong>Hora envio:</strong> ${horaEnvio}</p>
+                <p><strong>Estado:</strong> ${req.info.estado_general}</p>
+                <p><strong>Tipo movimiento:</strong> ${tiposTexto}</p>
+            </div>
             <table>
                 <thead>
                     <tr>
