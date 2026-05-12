@@ -73,7 +73,7 @@
 
     <div class="card horarios-login-card">
         <h3>Horarios por turno</h3>
-        <p class="horarios-sub">Los horarios se muestran por rol y turno</p>
+        <p id="horarios_subtitulo" class="horarios-sub">Los horarios se muestran por rol y turno</p>
 
         <div class="turnos-grid">
             <div class="turno-box">
@@ -146,6 +146,27 @@
         return null;
     }
 
+    function obtenerDiaSemanaTijuana() {
+        const abreviado = new Intl.DateTimeFormat("en-US", {
+            timeZone: "America/Tijuana",
+            weekday: "short"
+        }).format(new Date());
+
+        const mapa = {
+            Sun: 0,
+            Mon: 1,
+            Tue: 2,
+            Wed: 3,
+            Thu: 4,
+            Fri: 5,
+            Sat: 6
+        };
+
+        const indice = mapa[abreviado] ?? new Date().getDay();
+        const nombre = DIAS[indice] || "Hoy";
+        return { indice, nombre };
+    }
+
     function pintarTablaTurno(idTabla, filas) {
         const tbody = document.getElementById(idTabla);
         if (!tbody) return;
@@ -166,6 +187,12 @@
 
     async function cargarHorariosPorTurno() {
         try {
+            const diaActual = obtenerDiaSemanaTijuana();
+            const subtitulo = document.getElementById("horarios_subtitulo");
+            if (subtitulo) {
+                subtitulo.textContent = `Mostrando horarios activos del dia ${diaActual.nombre} (rol y turno).`;
+            }
+
             const respuestas = await Promise.all(
                 ROLES_HORARIO.map(rol =>
                     fetch(`/horarios-login?rol=${rol}`)
@@ -181,7 +208,10 @@
                 const rol = rolTitulo(ROLES_HORARIO[idx]);
                 (Array.isArray(lista) ? lista : []).forEach(h => {
                     if (!h || h.activo === false) return;
-                    const dia = DIAS[Number(h.dia_semana)] || String(h.dia_semana ?? "-");
+                    const indiceDia = Number(h.dia_semana);
+                    if (!Number.isInteger(indiceDia) || indiceDia !== diaActual.indice) return;
+
+                    const dia = DIAS[indiceDia] || String(h.dia_semana ?? "-");
                     const fila = {
                         rol,
                         dia,
@@ -201,6 +231,10 @@
             pintarTablaTurno("tabla_turno_01", turno01);
             pintarTablaTurno("tabla_turno_02", turno02);
         } catch (error) {
+            const subtitulo = document.getElementById("horarios_subtitulo");
+            if (subtitulo) {
+                subtitulo.textContent = "No se pudieron cargar los horarios del dia.";
+            }
             pintarTablaTurno("tabla_turno_01", []);
             pintarTablaTurno("tabla_turno_02", []);
         }
