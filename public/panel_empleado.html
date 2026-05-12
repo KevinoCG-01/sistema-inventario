@@ -86,6 +86,14 @@
     </select>
     <br><br>
 </div>
+<div id="bloque_filtro_material_modulo" style="display:none;">
+    <label><strong>Filtro de material (Modulo):</strong></label><br>
+    <select id="filtro_tipo_material_modulo">
+        <option value="herramienta" selected>Herramienta</option>
+        <option value="consumible">Consumible</option>
+    </select>
+    <br><br>
+</div>
 </div>
 
 <div id="panel_crear_requisicion" class="card">
@@ -296,11 +304,20 @@ function obtenerFiltroTipoMaterialEnsamble(){
     return tipo === "herramienta" ? "herramienta" : "consumible";
 }
 
+function obtenerFiltroTipoMaterialModulo(){
+    const select = document.getElementById("filtro_tipo_material_modulo");
+    const tipo = String(select?.value || "herramienta").trim().toLowerCase();
+    return tipo === "consumible" ? "consumible" : "herramienta";
+}
+
 function sincronizarFiltroMaterialEnsamble(){
-    const bloque = document.getElementById("bloque_filtro_material_ensamble");
-    if (!bloque) return;
+    const bloqueEnsamble = document.getElementById("bloque_filtro_material_ensamble");
+    const bloqueModulo = document.getElementById("bloque_filtro_material_modulo");
+    if (!bloqueEnsamble && !bloqueModulo) return;
+
     const esEnsamble = normalizarOrigen(origenCrearActivo) === "ensamble";
-    bloque.style.display = esEnsamble ? "block" : "none";
+    if (bloqueEnsamble) bloqueEnsamble.style.display = esEnsamble ? "block" : "none";
+    if (bloqueModulo) bloqueModulo.style.display = esEnsamble ? "none" : "block";
 }
 
 function sincronizarOpcionesTipoMovimiento(){
@@ -615,6 +632,12 @@ async function cargarMateriales() {
     if (tipoOrigen === "modulo") {
         const response = await fetch("/herramienta-modulo");
         data = await response.json();
+        const tipoFiltroModulo = obtenerFiltroTipoMaterialModulo();
+        data = (Array.isArray(data) ? data : []).filter(mat => {
+            const descripcion = String(mat?.descripcion || "").trim().toLowerCase();
+            if (tipoFiltroModulo === "consumible") return descripcion.includes("consumible");
+            return descripcion.includes("herramienta");
+        });
     } else {
         const tipoFiltro = obtenerFiltroTipoMaterialEnsamble();
         const response = await fetch(`/materiales?tipo=${encodeURIComponent(tipoFiltro)}`);
@@ -1391,6 +1414,11 @@ document.getElementById("material_select").addEventListener("change", actualizar
 document.getElementById("tipo_movimiento").addEventListener("change", actualizarInfoMaterialSeleccionado);
 document.getElementById("filtro_tipo_material_ensamble")?.addEventListener("change", () => {
     if (normalizarOrigen(origenCrearActivo) !== "ensamble") return;
+    cargarMateriales();
+    actualizarInfoMaterialSeleccionado();
+});
+document.getElementById("filtro_tipo_material_modulo")?.addEventListener("change", () => {
+    if (normalizarOrigen(origenCrearActivo) !== "modulo") return;
     cargarMateriales();
     actualizarInfoMaterialSeleccionado();
 });
