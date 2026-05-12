@@ -37,15 +37,26 @@
             color: #fff;
         }
 
-        .filtro-orden-requisiciones {
+        .filtros-requisiciones {
             display: flex;
-            align-items: center;
-            gap: 8px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 10px;
             margin: 0 0 12px;
-            max-width: 320px;
         }
 
-        .filtro-orden-requisiciones label {
+        .filtro-requisicion-item {
+            min-width: 170px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filtro-requisicion-item.orden {
+            min-width: 220px;
+        }
+
+        .filtro-requisicion-item label {
             margin: 0;
             white-space: nowrap;
         }
@@ -100,24 +111,44 @@
 
 <div id="seccion_consumibles" class="card">
     <h2>Requisiciones de Consumibles</h2>
-    <div class="filtro-orden-requisiciones">
-        <label for="orden_requisiciones_consumibles"><strong>Orden:</strong></label>
-        <select id="orden_requisiciones_consumibles" onchange="cargarRequisiciones()">
-            <option value="reciente" selected>Mas reciente</option>
-            <option value="antigua">Mas antigua</option>
-        </select>
+    <div class="filtros-requisiciones">
+        <div class="filtro-requisicion-item orden">
+            <label for="orden_requisiciones_consumibles"><strong>Orden:</strong></label>
+            <select id="orden_requisiciones_consumibles" onchange="cargarRequisiciones()">
+                <option value="reciente" selected>Mas reciente</option>
+                <option value="antigua">Mas antigua</option>
+            </select>
+        </div>
+        <div class="filtro-requisicion-item">
+            <label for="fecha_requisiciones_consumibles_desde"><strong>Desde:</strong></label>
+            <input type="date" id="fecha_requisiciones_consumibles_desde" onchange="cargarRequisiciones()">
+        </div>
+        <div class="filtro-requisicion-item">
+            <label for="fecha_requisiciones_consumibles_hasta"><strong>Hasta:</strong></label>
+            <input type="date" id="fecha_requisiciones_consumibles_hasta" onchange="cargarRequisiciones()">
+        </div>
     </div>
     <div id="requisiciones"></div>
 </div>
 
 <div id="seccion_modulo" class="card" style="display:none;">
     <h2>Requisiciones de Herramienta Modulo</h2>
-    <div class="filtro-orden-requisiciones">
-        <label for="orden_requisiciones_modulo"><strong>Orden:</strong></label>
-        <select id="orden_requisiciones_modulo" onchange="cargarRequisicionesModulo()">
-            <option value="reciente" selected>Mas reciente</option>
-            <option value="antigua">Mas antigua</option>
-        </select>
+    <div class="filtros-requisiciones">
+        <div class="filtro-requisicion-item orden">
+            <label for="orden_requisiciones_modulo"><strong>Orden:</strong></label>
+            <select id="orden_requisiciones_modulo" onchange="cargarRequisicionesModulo()">
+                <option value="reciente" selected>Mas reciente</option>
+                <option value="antigua">Mas antigua</option>
+            </select>
+        </div>
+        <div class="filtro-requisicion-item">
+            <label for="fecha_requisiciones_modulo_desde"><strong>Desde:</strong></label>
+            <input type="date" id="fecha_requisiciones_modulo_desde" onchange="cargarRequisicionesModulo()">
+        </div>
+        <div class="filtro-requisicion-item">
+            <label for="fecha_requisiciones_modulo_hasta"><strong>Hasta:</strong></label>
+            <input type="date" id="fecha_requisiciones_modulo_hasta" onchange="cargarRequisicionesModulo()">
+        </div>
     </div>
     <div id="requisiciones_modulo"></div>
 </div>
@@ -566,11 +597,37 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
     const selectOrdenId = contenedorId === "requisiciones_modulo"
         ? "orden_requisiciones_modulo"
         : "orden_requisiciones_consumibles";
+    const selectFechaDesdeId = contenedorId === "requisiciones_modulo"
+        ? "fecha_requisiciones_modulo_desde"
+        : "fecha_requisiciones_consumibles_desde";
+    const selectFechaHastaId = contenedorId === "requisiciones_modulo"
+        ? "fecha_requisiciones_modulo_hasta"
+        : "fecha_requisiciones_consumibles_hasta";
     const ordenSeleccionado = document.getElementById(selectOrdenId)?.value === "antigua"
         ? "antigua"
         : "reciente";
+    const fechaDesdeRaw = document.getElementById(selectFechaDesdeId)?.value || "";
+    const fechaHastaRaw = document.getElementById(selectFechaHastaId)?.value || "";
+    const fechaDesdeMs = fechaDesdeRaw
+        ? new Date(`${fechaDesdeRaw}T00:00:00`).getTime()
+        : null;
+    const fechaHastaMs = fechaHastaRaw
+        ? new Date(`${fechaHastaRaw}T23:59:59.999`).getTime()
+        : null;
 
-    requisiciones.sort((a, b) => {
+    const requisicionesFiltradas = requisiciones.filter(([, req]) => {
+        const marca = obtenerMarcaTiempo(req?.info?.fecha);
+        if (fechaDesdeMs !== null && marca < fechaDesdeMs) return false;
+        if (fechaHastaMs !== null && marca > fechaHastaMs) return false;
+        return true;
+    });
+
+    if (requisicionesFiltradas.length === 0) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Sin requisiciones activas para el rango seleccionado.</p>`);
+        return;
+    }
+
+    requisicionesFiltradas.sort((a, b) => {
         const fechaA = obtenerMarcaTiempo(a[1]?.info?.fecha);
         const fechaB = obtenerMarcaTiempo(b[1]?.info?.fecha);
         return ordenSeleccionado === "antigua"
@@ -578,7 +635,7 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
             : fechaB - fechaA;
     });
 
-    const htmlFinal = requisiciones.map(([reqId, req]) => {
+    const htmlFinal = requisicionesFiltradas.map(([reqId, req]) => {
         const tiposMov = [...new Set(
             req.detalles
                 .map(d => String(d.tipo_movimiento || "").trim().toLowerCase())
