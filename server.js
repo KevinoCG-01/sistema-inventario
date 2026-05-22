@@ -4171,8 +4171,8 @@ app.post("/asignaciones/solicitar", async (req, res) => {
 
         await pool.query(
             `INSERT INTO asignaciones_equipos
-             (usuario_id, equipo_id, linea_id, estado, fecha_solicitud)
-             VALUES ($1,$2,$3,'pendiente',CURRENT_TIMESTAMP)`,
+             (usuario_id, equipo_id, linea_id, estado, fecha_solicitud, fecha_aprobacion)
+             VALUES ($1,$2,$3,'aprobado',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
             [usuarioId, equipoIdFinal, lineaIdFinal]
         );
 

@@ -347,7 +347,7 @@ if (data.length === 0) {
     }
 
     if (estadoActual === "pendiente") {
-        estadoDiv.innerText = "🟠 Tienes una solicitud pendiente de aprobacion";
+        estadoDiv.innerText = "🟠 Tienes una solicitud pendiente de entrega en instrumentacion";
         estadoDiv.className = "estado-activo estado-pendiente";
     }
     else if (estadoActual === "aprobado") {
@@ -404,7 +404,7 @@ async function procesarAccion() {
             return;
         }
 
-        alert("Solicitud enviada correctamente");
+        alert("Solicitud enviada correctamente a instrumentacion");
 
     }
 
