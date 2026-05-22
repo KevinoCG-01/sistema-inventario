@@ -270,8 +270,18 @@ async function asegurarEstructuraRequisiciones() {
     `);
 
     await pool.query(`
+        ALTER TABLE detalle_requisicion
+        ADD COLUMN IF NOT EXISTS aprobado_manager BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    await pool.query(`
         ALTER TABLE detalle_requisicion_modulo
         ADD COLUMN IF NOT EXISTS aprobado_supervisor BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    await pool.query(`
+        ALTER TABLE detalle_requisicion_modulo
+        ADD COLUMN IF NOT EXISTS aprobado_manager BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
     // Backfill para no bloquear historicos ya entregados y cambios/retornos.
@@ -283,8 +293,22 @@ async function asegurarEstructuraRequisiciones() {
     `);
 
     await pool.query(`
+        UPDATE detalle_requisicion
+        SET aprobado_manager = TRUE
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) <> 'nuevo'
+           OR COALESCE(cantidad_entregada, 0) > 0
+    `);
+
+    await pool.query(`
         UPDATE detalle_requisicion_modulo
         SET aprobado_supervisor = TRUE
+        WHERE LOWER(COALESCE(tipo_movimiento, '')) <> 'nuevo'
+           OR COALESCE(cantidad_entregada, 0) > 0
+    `);
+
+    await pool.query(`
+        UPDATE detalle_requisicion_modulo
+        SET aprobado_manager = TRUE
         WHERE LOWER(COALESCE(tipo_movimiento, '')) <> 'nuevo'
            OR COALESCE(cantidad_entregada, 0) > 0
     `);
@@ -306,6 +330,22 @@ async function asegurarEstadoUsuarios() {
         UPDATE usuarios
         SET activo = TRUE
         WHERE activo IS NULL
+    `);
+
+    await pool.query(`
+        ALTER TABLE usuarios
+        DROP CONSTRAINT IF EXISTS usuarios_rol_check
+    `);
+
+    await pool.query(`
+        ALTER TABLE usuarios
+        DROP CONSTRAINT IF EXISTS chk_usuarios_rol
+    `);
+
+    await pool.query(`
+        ALTER TABLE usuarios
+        ADD CONSTRAINT chk_usuarios_rol
+        CHECK (rol IN ('admin', 'supervisor', 'tecnico', 'empleado', 'manager'))
     `);
 }
 
@@ -401,12 +441,23 @@ async function asegurarHorariosLogin() {
             activo BOOLEAN NOT NULL DEFAULT TRUE,
             creado_en TIMESTAMP NOT NULL DEFAULT NOW(),
             CONSTRAINT chk_horarios_login_rol
-                CHECK (rol IN ('admin', 'supervisor', 'tecnico', 'empleado')),
+                CHECK (rol IN ('admin', 'supervisor', 'tecnico', 'empleado', 'manager')),
             CONSTRAINT chk_horarios_login_dia
                 CHECK (dia_semana BETWEEN 0 AND 6),
             CONSTRAINT chk_horarios_login_horas
                 CHECK (hora_inicio < hora_fin)
         )
+    `);
+
+    await pool.query(`
+        ALTER TABLE horarios_login
+        DROP CONSTRAINT IF EXISTS chk_horarios_login_rol
+    `);
+
+    await pool.query(`
+        ALTER TABLE horarios_login
+        ADD CONSTRAINT chk_horarios_login_rol
+        CHECK (rol IN ('admin', 'supervisor', 'tecnico', 'empleado', 'manager'))
     `);
 }
 
@@ -503,7 +554,7 @@ async function asegurarEstructuraHerramientaModulo() {
     `);
 }
 
-const ROLES_HORARIO = new Set(["admin", "supervisor", "tecnico", "empleado"]);
+const ROLES_HORARIO = new Set(["admin", "supervisor", "tecnico", "empleado", "manager"]);
 
 function normalizarHora(hora) {
     if (typeof hora !== "string") return null;
@@ -1865,68 +1916,99 @@ app.put("/asignaciones/:id/rechazar-devolucion", async (req, res) => {
     }
 });
 
-app.get("/requisiciones-pendientes-admin", async (req, res) => {
-    try {
-        const result = await pool.query(`
+async function obtenerRequisicionesPendientesNuevoPorRol(rolAprobador = "admin") {
+    const rol = String(rolAprobador || "admin").trim().toLowerCase();
+    const esManager = rol === "manager";
+
+    const condicionEnsamble = esManager
+        ? "COALESCE(d.aprobado_supervisor, FALSE) = TRUE AND COALESCE(d.aprobado_manager, FALSE) = FALSE"
+        : "COALESCE(d.aprobado_supervisor, FALSE) = FALSE";
+    const condicionModulo = esManager
+        ? "COALESCE(dm.aprobado_supervisor, FALSE) = TRUE AND COALESCE(dm.aprobado_manager, FALSE) = FALSE"
+        : "COALESCE(dm.aprobado_supervisor, FALSE) = FALSE";
+
+    const result = await pool.query(`
+        SELECT
+            r.id AS requisicion_id,
+            r.fecha,
+            COALESCE(r.tipo_origen, 'ensamble') AS tipo_origen,
+            COALESCE(r.turno, CASE
+                WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') THEN 'Turno 01'
+                WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00'
+                   OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
+                ELSE 'Fuera de turno'
+            END) AS turno,
+            COALESCE(l.nombre, '-') AS linea_nombre,
+            COALESCE(u.nombre, '-') AS solicitante,
+            COALESCE(u.numero_id::text, '-') AS numero_id,
+            d.detalle_id,
+            d.detalle_tipo,
+            d.material,
+            d.estado,
+            d.tipo_movimiento,
+            d.cantidad_solicitada,
+            d.aprobado_supervisor,
+            d.aprobado_manager
+        FROM requisiciones r
+        JOIN usuarios u ON r.usuario_id = u.id
+        LEFT JOIN lineas_produccion l ON r.linea_id = l.id
+        JOIN (
             SELECT
-                r.id AS requisicion_id,
-                r.fecha,
-                COALESCE(r.tipo_origen, 'ensamble') AS tipo_origen,
-                COALESCE(r.turno, CASE
-                    WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time BETWEEN TIME '06:24:00' AND TIME '16:29:59') THEN 'Turno 01'
-                    WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00'
-                       OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') THEN 'Turno 02'
-                    ELSE 'Fuera de turno'
-                END) AS turno,
-                COALESCE(l.nombre, '-') AS linea_nombre,
-                COALESCE(u.nombre, '-') AS solicitante,
-                COALESCE(u.numero_id::text, '-') AS numero_id,
-                d.detalle_id,
-                d.detalle_tipo,
-                d.material,
+                d.requisicion_id,
+                d.id AS detalle_id,
+                'ensamble' AS detalle_tipo,
+                m.nombre AS material,
                 d.estado,
                 d.tipo_movimiento,
-                d.cantidad_solicitada
-            FROM requisiciones r
-            JOIN usuarios u ON r.usuario_id = u.id
-            LEFT JOIN lineas_produccion l ON r.linea_id = l.id
-            JOIN (
-                SELECT
-                    d.requisicion_id,
-                    d.id AS detalle_id,
-                    'ensamble' AS detalle_tipo,
-                    m.nombre AS material,
-                    d.estado,
-                    d.tipo_movimiento,
-                    d.cantidad_solicitada
-                FROM detalle_requisicion d
-                JOIN materiales m ON d.material_id = m.id
-                WHERE LOWER(COALESCE(d.tipo_movimiento, '')) = 'nuevo'
-                  AND COALESCE(d.aprobado_supervisor, FALSE) = FALSE
-                  AND COALESCE(d.estado, '') <> 'rechazada'
-                UNION ALL
-                SELECT
-                    dm.requisicion_id,
-                    dm.id AS detalle_id,
-                    'modulo' AS detalle_tipo,
-                    hm.nombre AS material,
-                    dm.estado,
-                    dm.tipo_movimiento,
-                    dm.cantidad_solicitada
-                FROM detalle_requisicion_modulo dm
-                JOIN herramienta_modulo hm ON dm.herramienta_modulo_id = hm.id
-                WHERE LOWER(COALESCE(dm.tipo_movimiento, '')) = 'nuevo'
-                  AND COALESCE(dm.aprobado_supervisor, FALSE) = FALSE
-                  AND COALESCE(dm.estado, '') <> 'rechazada'
-            ) d ON d.requisicion_id = r.id
-            WHERE COALESCE(r.estado_general, '') NOT IN ('completa', 'rechazada', 'cancelada')
-            ORDER BY r.id DESC, d.material ASC
-        `);
+                d.cantidad_solicitada,
+                COALESCE(d.aprobado_supervisor, FALSE) AS aprobado_supervisor,
+                COALESCE(d.aprobado_manager, FALSE) AS aprobado_manager
+            FROM detalle_requisicion d
+            JOIN materiales m ON d.material_id = m.id
+            WHERE LOWER(COALESCE(d.tipo_movimiento, '')) = 'nuevo'
+              AND ${condicionEnsamble}
+              AND COALESCE(d.estado, '') <> 'rechazada'
+            UNION ALL
+            SELECT
+                dm.requisicion_id,
+                dm.id AS detalle_id,
+                'modulo' AS detalle_tipo,
+                hm.nombre AS material,
+                dm.estado,
+                dm.tipo_movimiento,
+                dm.cantidad_solicitada,
+                COALESCE(dm.aprobado_supervisor, FALSE) AS aprobado_supervisor,
+                COALESCE(dm.aprobado_manager, FALSE) AS aprobado_manager
+            FROM detalle_requisicion_modulo dm
+            JOIN herramienta_modulo hm ON dm.herramienta_modulo_id = hm.id
+            WHERE LOWER(COALESCE(dm.tipo_movimiento, '')) = 'nuevo'
+              AND ${condicionModulo}
+              AND COALESCE(dm.estado, '') <> 'rechazada'
+        ) d ON d.requisicion_id = r.id
+        WHERE COALESCE(r.estado_general, '') NOT IN ('completa', 'rechazada', 'cancelada')
+        ORDER BY r.id DESC, d.material ASC
+    `);
 
-        res.json(result.rows);
+    return result.rows;
+}
+
+app.get("/requisiciones-pendientes-admin", async (req, res) => {
+    try {
+        const rows = await obtenerRequisicionesPendientesNuevoPorRol("admin");
+        res.json(rows);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Error al obtener requisiciones pendientes de aprobacion" });
+    }
+});
+
+app.get("/requisiciones-pendientes-manager", async (req, res) => {
+    try {
+        const rows = await obtenerRequisicionesPendientesNuevoPorRol("manager");
+        res.json(rows);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al obtener requisiciones pendientes de manager" });
     }
 });
 
@@ -2040,7 +2122,8 @@ app.put("/requisiciones-detalle/:detalle_id/rechazar-admin", async (req, res) =>
         await pool.query(
             `UPDATE ${tabla}
              SET estado = 'rechazada',
-                 aprobado_supervisor = FALSE
+                 aprobado_supervisor = FALSE,
+                 aprobado_manager = FALSE
              WHERE id = $1`,
             [detalle_id]
         );
@@ -2091,6 +2174,75 @@ app.put("/requisiciones-detalle/:detalle_id/rechazar-admin", async (req, res) =>
         await pool.query("ROLLBACK");
         console.error(error);
         res.status(500).json({ error: "Error al rechazar material nuevo" });
+    }
+});
+
+app.put("/requisiciones-detalle/:detalle_id/aprobar-manager", async (req, res) => {
+    const { detalle_id } = req.params;
+    const usuarioManagerId = parseInt(req.body?.usuario_manager_id, 10);
+    const detalleTipo = String(req.body?.detalle_tipo || "ensamble").trim().toLowerCase();
+
+    if (!Number.isInteger(usuarioManagerId) || usuarioManagerId <= 0) {
+        return res.status(400).json({ error: "Usuario manager invalido" });
+    }
+    if (!["ensamble", "modulo"].includes(detalleTipo)) {
+        return res.status(400).json({ error: "Tipo de detalle invalido" });
+    }
+
+    try {
+        const managerResult = await pool.query(
+            "SELECT rol, COALESCE(activo, TRUE) AS activo FROM usuarios WHERE id = $1",
+            [usuarioManagerId]
+        );
+        if (managerResult.rows.length === 0 || managerResult.rows[0].rol !== "manager") {
+            return res.status(403).json({ error: "Solo manager puede aprobar en esta etapa" });
+        }
+        if (managerResult.rows[0].activo === false) {
+            return res.status(403).json({ error: "Manager deshabilitado" });
+        }
+
+        const tabla = detalleTipo === "modulo" ? "detalle_requisicion_modulo" : "detalle_requisicion";
+        const detalleResult = await pool.query(
+            `SELECT
+                id,
+                requisicion_id,
+                COALESCE(tipo_movimiento, '') AS tipo_movimiento,
+                COALESCE(estado, '') AS estado,
+                COALESCE(aprobado_supervisor, FALSE) AS aprobado_supervisor,
+                COALESCE(aprobado_manager, FALSE) AS aprobado_manager
+             FROM ${tabla}
+             WHERE id = $1`,
+            [detalle_id]
+        );
+
+        if (detalleResult.rows.length === 0) {
+            return res.status(404).json({ error: "Detalle no encontrado" });
+        }
+        const detalle = detalleResult.rows[0];
+        if (String(detalle.tipo_movimiento).toLowerCase() !== "nuevo") {
+            return res.status(400).json({ error: "Solo se puede aprobar material tipo nuevo" });
+        }
+        if (String(detalle.estado).toLowerCase() === "rechazada") {
+            return res.status(400).json({ error: "No se puede aprobar un material ya rechazado" });
+        }
+        if (!(detalle.aprobado_supervisor === true || String(detalle.aprobado_supervisor).toLowerCase() === "true")) {
+            return res.status(400).json({ error: "Este material debe ser aprobado primero por admin" });
+        }
+        if (detalle.aprobado_manager === true || String(detalle.aprobado_manager).toLowerCase() === "true") {
+            return res.json({ success: true, ya_aprobado: true });
+        }
+
+        await pool.query(
+            `UPDATE ${tabla}
+             SET aprobado_manager = TRUE
+             WHERE id = $1`,
+            [detalle_id]
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error al aprobar material nuevo (manager)" });
     }
 });
 
@@ -2237,7 +2389,7 @@ app.post("/usuarios", async (req, res) => {
         return res.status(400).json({ error: "Datos incompletos" });
     }
 
-    if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
+    if (!["tecnico", "empleado", "supervisor", "manager"].includes(rol)) {
         return res.status(400).json({ error: "Rol invÃ¡lido" });
     }
 
@@ -2274,7 +2426,7 @@ app.get("/usuarios", async (req, res) => {
         const result = await pool.query(`
             SELECT id, nombre, numero_id, rol, ${PASS_COL} AS contrasena, COALESCE(activo, TRUE) AS activo
             FROM usuarios
-            WHERE rol IN ('tecnico','empleado','supervisor')
+            WHERE rol IN ('tecnico','empleado','supervisor','manager')
             ORDER BY id DESC
         `);
 
@@ -2296,7 +2448,7 @@ app.put("/usuarios/:id", async (req, res) => {
         return res.status(400).json({ error: "Datos incompletos" });
     }
 
-    if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
+    if (!["tecnico", "empleado", "supervisor", "manager"].includes(rol)) {
         return res.status(400).json({ error: "Rol invalido" });
     }
 
@@ -2343,7 +2495,7 @@ app.put("/usuarios/:id/estado", async (req, res) => {
 
     try {
         const result = await pool.query(
-            "UPDATE usuarios SET activo = $1 WHERE id = $2 AND rol IN ('tecnico','empleado','supervisor')",
+            "UPDATE usuarios SET activo = $1 WHERE id = $2 AND rol IN ('tecnico','empleado','supervisor','manager')",
             [activo, id]
         );
 
@@ -2473,7 +2625,7 @@ app.get("/exportar-requisiciones", async (req, res) => {
         );
 
         const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
-        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico", "manager"]);
 
         if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
             return res.status(403).json({ error: "Acceso no autorizado" });
@@ -2541,7 +2693,7 @@ app.get("/exportar-requisiciones-modulo", async (req, res) => {
         );
 
         const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
-        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico", "manager"]);
 
         if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
             return res.status(403).json({ error: "Acceso no autorizado" });
@@ -2608,7 +2760,7 @@ app.get("/exportar-devoluciones", async (req, res) => {
         );
 
         const rolUsuario = String(usuario.rows[0]?.rol || "").trim().toLowerCase();
-        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico"]);
+        const rolesPermitidosExportacion = new Set(["admin", "supervisor", "empleado", "tecnico", "manager"]);
 
         if (usuario.rows.length === 0 || !rolesPermitidosExportacion.has(rolUsuario)) {
             return res.status(403).json({ error: "Acceso no autorizado" });
@@ -3187,7 +3339,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
                 "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
                 "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
                 "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, hm.nombre AS material, 'modulo' AS tipo, " +
-                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, " +
+                "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, COALESCE(d.aprobado_manager, FALSE) AS aprobado_manager, " +
                 "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
                 "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
                 "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
@@ -3219,7 +3371,7 @@ app.get("/requisiciones-detalle", async (req, res) => {
             "THEN 'Turno 01' WHEN ((r.fecha AT TIME ZONE 'America/Tijuana')::time >= TIME '16:30:00' OR (r.fecha AT TIME ZONE 'America/Tijuana')::time <= TIME '01:00:00') " +
             "THEN 'Turno 02' ELSE 'Fuera de turno' END) AS turno, l.nombre AS linea_nombre, " +
             "u.nombre, u.numero_id, u.rol AS rol_solicitante, d.id AS detalle_id, m.nombre AS material, m.tipo, " +
-            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, " +
+            "d.cantidad_solicitada, d.cantidad_entregada, d.estado, d.tipo_movimiento, d.aprobado_supervisor, COALESCE(d.aprobado_manager, FALSE) AS aprobado_manager, " +
             "COALESCE(d.cantidad_retorno_aceptada, 0) AS cantidad_retorno_aceptada, " +
             "COALESCE(d.cantidad_retorno_devuelta_linea, 0) AS cantidad_retorno_devuelta_linea, " +
             "d.retorno_recibido_por_id, d.retorno_recibido_en, ur.nombre AS recibido_por, ur.rol AS rol_recibido_por " +
@@ -3304,10 +3456,13 @@ app.post("/entregar-material", async (req, res) => {
             await pool.query("ROLLBACK");
             return res.status(400).json({ error: "Este material fue rechazado y ya no puede entregarse" });
         }
-        if (tipoMovimiento === "nuevo" && det.aprobado_supervisor !== true) {
+        const aprobadoAdmin = det.aprobado_supervisor === true || String(det.aprobado_supervisor).toLowerCase() === "true";
+        const aprobadoManager = det.aprobado_manager === true || String(det.aprobado_manager).toLowerCase() === "true";
+
+        if (tipoMovimiento === "nuevo" && (!aprobadoAdmin || !aprobadoManager)) {
             await pool.query("ROLLBACK");
             return res.status(400).json({
-                error: "Este material tipo nuevo debe ser aprobado por supervisor antes de entregarse"
+                error: "Este material tipo nuevo requiere aprobacion de admin y manager antes de entregarse"
             });
         }
         const nuevoEntregado = parseInt(det.cantidad_entregada, 10) + cantidad;
@@ -3662,7 +3817,10 @@ app.put("/requisiciones/:id/rechazar", async (req, res) => {
                  WHERE requisicion_id = $1
                    AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
                    AND COALESCE(estado, '') <> 'rechazada'
-                   AND COALESCE(aprobado_supervisor, FALSE) = FALSE`,
+                   AND (
+                       COALESCE(aprobado_supervisor, FALSE) = FALSE
+                       OR COALESCE(aprobado_manager, FALSE) = FALSE
+                   )`,
                 [id]
             )
             : await pool.query(
@@ -3671,7 +3829,10 @@ app.put("/requisiciones/:id/rechazar", async (req, res) => {
                  WHERE requisicion_id = $1
                    AND LOWER(COALESCE(tipo_movimiento, '')) = 'nuevo'
                    AND COALESCE(estado, '') <> 'rechazada'
-                   AND COALESCE(aprobado_supervisor, FALSE) = FALSE`,
+                   AND (
+                       COALESCE(aprobado_supervisor, FALSE) = FALSE
+                       OR COALESCE(aprobado_manager, FALSE) = FALSE
+                   )`,
                 [id]
             );
 

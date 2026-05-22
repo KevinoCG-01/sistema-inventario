@@ -114,7 +114,7 @@
 </div>
 
 <script>
-    const ROLES_HORARIO = ["empleado", "tecnico", "supervisor", "admin"];
+    const ROLES_HORARIO = ["empleado", "tecnico", "supervisor", "admin", "manager"];
     const DIAS = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
 
     function rolTitulo(rol) {
@@ -123,6 +123,7 @@
         if (r === "tecnico") return "Tecnico de PFA";
         if (r === "empleado") return "Supervisor de PFA";
         if (r === "admin") return "Admin";
+        if (r === "manager") return "Manager";
         return String(rol || "").charAt(0).toUpperCase() + String(rol || "").slice(1);
     }
 
@@ -265,7 +266,7 @@
             if (data.success) {
                 localStorage.setItem("usuario", JSON.stringify(data.usuario));
                 const rol = String(data.usuario?.rol || "").toLowerCase();
-                const rolesSesionCorta = new Set(["admin", "supervisor", "tecnico", "empleado"]);
+                const rolesSesionCorta = new Set(["admin", "supervisor", "tecnico", "empleado", "manager"]);
 
                 if (rolesSesionCorta.has(rol)) {
                     const ahora = Date.now();
@@ -283,6 +284,8 @@
 
                 if (data.usuario.rol === "admin") {
                     window.location.href = "panel_admin.html";
+                } else if (data.usuario.rol === "manager") {
+                    window.location.href = "panel_manager.html";
                 } else if (data.usuario.rol === "supervisor") {
                     window.location.href = "panel_supervisor.html";
                 } else if (data.usuario.rol === "empleado") {

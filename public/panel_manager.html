@@ -1,0 +1,383 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="styles.css">
+<title>Panel Manager PFA</title>
+<style>
+:root {
+    --brand-1: #0f766e;
+    --brand-2: #0ea5a6;
+    --brand-3: #134e4a;
+    --surface: #ffffff;
+    --line: #dbe3ea;
+    --text: #0f172a;
+}
+
+body {
+    margin: 0;
+    padding: 24px;
+    color: var(--text);
+    background:
+        radial-gradient(900px 400px at 10% -10%, rgba(20, 184, 166, 0.25), transparent 60%),
+        radial-gradient(1000px 500px at 95% 0%, rgba(14, 165, 166, 0.2), transparent 60%),
+        linear-gradient(135deg, #eaf6f6 0%, #f4f7fb 45%, #eef7f9 100%);
+}
+
+.container {
+    max-width: 1280px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 12px 32px rgba(2, 8, 23, 0.08);
+}
+
+h1 {
+    margin: 0 0 18px;
+    color: var(--brand-3);
+    letter-spacing: 0.2px;
+}
+
+.seccion {
+    margin-top: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.acciones-linea {
+    display: inline-flex;
+    gap: 8px;
+}
+
+.requisicion-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 0 18px;
+    margin-top: 6px;
+}
+
+.requisicion-meta-grid p {
+    margin: 6px 0;
+}
+
+@media (max-width: 860px) {
+    .requisicion-meta-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+</head>
+<body>
+<div id="menu_backdrop_manager" class="side-menu-backdrop" onclick="cerrarMenuLateralManager()"></div>
+<aside id="menu_lateral_manager" class="side-menu">
+<h3 class="side-menu-title">Menu</h3>
+<div class="side-menu-items">
+<button class="side-menu-item" data-seccion="aprobaciones" onclick="mostrarSeccionManager('aprobaciones')">Aprobaciones tipo nuevo</button>
+</div>
+</aside>
+
+<div class="container">
+<div class="panel-header">
+<div class="panel-header-left">
+<button class="menu-toggle-btn" onclick="toggleMenuLateralManager(event)" aria-label="Abrir menu">&#9776;</button>
+<h1>Panel Manager</h1>
+</div>
+<div class="logout-menu">
+<button class="logout-toggle" onclick="toggleLogoutMenu(event)">▾</button>
+<div id="logout-dropdown" class="logout-dropdown">
+<button onclick="cerrarSesion()">Cerrar sesion</button>
+</div>
+</div>
+</div>
+
+<h2 id="bienvenida_manager"></h2>
+
+<div id="aprobaciones" class="seccion">
+<h2>Requisiciones de material pendientes (tipo Nuevo)</h2>
+<p style="margin:0 0 12px; opacity:.85;">En esta vista se realiza la segunda aprobacion (manager) para liberar entrega.</p>
+<div id="solicitudes_manager"></div>
+</div>
+</div>
+
+<script>
+function actualizarHtmlSinParpadeo(contenedor, htmlNuevo) {
+    if (!contenedor) return false;
+    const actual = String(contenedor.innerHTML || "").trim();
+    const nuevo = String(htmlNuevo || "").trim();
+    if (actual === nuevo) return false;
+    contenedor.innerHTML = htmlNuevo;
+    return true;
+}
+
+function toggleLogoutMenu(event){
+    if (event) event.stopPropagation();
+    const menu = document.getElementById("logout-dropdown");
+    if (!menu) return;
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function toggleMenuLateralManager(event){
+    if (event) event.stopPropagation();
+    const panel = document.getElementById("menu_lateral_manager");
+    const backdrop = document.getElementById("menu_backdrop_manager");
+    if (!panel || !backdrop) return;
+    const abrir = !panel.classList.contains("open");
+    panel.classList.toggle("open", abrir);
+    backdrop.classList.toggle("open", abrir);
+}
+
+function cerrarMenuLateralManager(){
+    const panel = document.getElementById("menu_lateral_manager");
+    const backdrop = document.getElementById("menu_backdrop_manager");
+    if (!panel || !backdrop) return;
+    panel.classList.remove("open");
+    backdrop.classList.remove("open");
+}
+
+function actualizarMenuLateralManager(id){
+    document.querySelectorAll("#menu_lateral_manager .side-menu-item[data-seccion]").forEach(btn => {
+        btn.classList.toggle("activo", btn.dataset.seccion === id);
+    });
+}
+
+function mostrarSeccionManager(id){
+    document.querySelectorAll(".seccion").forEach(s => s.style.display = "none");
+    const target = document.getElementById(id);
+    if (target) target.style.display = "block";
+    actualizarMenuLateralManager(id);
+    cerrarMenuLateralManager();
+    if (id === "aprobaciones") {
+        cargarSolicitudesManager();
+    }
+}
+
+function cerrarSesion(){
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("token");
+    localStorage.removeItem("sesion_timeout_ms");
+    localStorage.removeItem("sesion_inicia_en");
+    localStorage.removeItem("sesion_expira_en");
+    localStorage.removeItem("sesion_rol");
+    window.location.href = "login.html";
+}
+
+document.addEventListener("click", (e) => {
+    const wrap = document.querySelector(".logout-menu");
+    const menu = document.getElementById("logout-dropdown");
+    if (wrap && menu && !wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+
+    const panel = document.getElementById("menu_lateral_manager");
+    const toggle = document.querySelector(".menu-toggle-btn");
+    if (panel && panel.classList.contains("open")) {
+        const clickEnPanel = panel.contains(e.target);
+        const clickEnToggle = !!(toggle && toggle.contains(e.target));
+        if (!clickEnPanel && !clickEnToggle) {
+            cerrarMenuLateralManager();
+        }
+    }
+});
+
+const DURACION_SESION_MS = 10 * 60 * 1000;
+const ROLES_SESION_CORTA = new Set(["admin", "supervisor", "tecnico", "empleado", "manager"]);
+let redirigiendoPorSesionExpirada = false;
+
+function validarSesionActivaConLimite(usuarioActual){
+    if (!usuarioActual) return false;
+    const rol = String(usuarioActual.rol || "").toLowerCase();
+    if (!ROLES_SESION_CORTA.has(rol)) return true;
+
+    const rolSesion = String(localStorage.getItem("sesion_rol") || "").toLowerCase();
+    let expiraEn = Number(localStorage.getItem("sesion_expira_en"));
+
+    if (rolSesion !== rol || !Number.isFinite(expiraEn) || expiraEn <= 0) {
+        const ahora = Date.now();
+        expiraEn = ahora + DURACION_SESION_MS;
+        localStorage.setItem("sesion_timeout_ms", String(DURACION_SESION_MS));
+        localStorage.setItem("sesion_inicia_en", String(ahora));
+        localStorage.setItem("sesion_expira_en", String(expiraEn));
+        localStorage.setItem("sesion_rol", rol);
+    }
+
+    if (Date.now() >= expiraEn) {
+        if (redirigiendoPorSesionExpirada) return false;
+        redirigiendoPorSesionExpirada = true;
+        localStorage.removeItem("usuario");
+        localStorage.removeItem("token");
+        localStorage.removeItem("sesion_timeout_ms");
+        localStorage.removeItem("sesion_inicia_en");
+        localStorage.removeItem("sesion_expira_en");
+        localStorage.removeItem("sesion_rol");
+        alert("Tu sesion expiro (10 minutos). Inicia sesion nuevamente.");
+        window.location.href = "login.html";
+        return false;
+    }
+
+    return true;
+}
+
+const usuarioAuth = JSON.parse(localStorage.getItem("usuario") || "null");
+if (!usuarioAuth || !validarSesionActivaConLimite(usuarioAuth) || usuarioAuth.rol !== "manager") {
+    alert("Acceso no autorizado");
+    window.location.href = "login.html";
+}
+
+const bienvenidaManager = document.getElementById("bienvenida_manager");
+if (bienvenidaManager) {
+    const nombreManager = (usuarioAuth && usuarioAuth.nombre) ? usuarioAuth.nombre : "Manager";
+    bienvenidaManager.textContent = `Bienvenido ${nombreManager}.`;
+}
+
+const originalFetch = window.fetch.bind(window);
+window.fetch = (input, init = {}) => {
+    const headers = new Headers(init.headers || {});
+    const token = localStorage.getItem("token");
+    if (token) headers.set("Authorization", "Bearer " + token);
+    return originalFetch(input, { ...init, headers });
+};
+
+function formatearTipoOrigen(tipo){
+    const key = String(tipo || "").trim().toLowerCase();
+    return key === "modulo" ? "Modulo" : "Ensamble";
+}
+
+function formatearFechaHora(fechaRaw){
+    if (!fechaRaw) return "-";
+    const fecha = new Date(fechaRaw);
+    if (Number.isNaN(fecha.getTime())) return "-";
+    return fecha.toLocaleString("es-MX");
+}
+
+async function aprobarDetalleManager(detalleId, detalleTipo){
+    if (!confirm("Esta accion aprobara este material tipo nuevo como manager. Deseas continuar?")) return;
+
+    const response = await fetch(`/requisiciones-detalle/${detalleId}/aprobar-manager`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            usuario_manager_id: usuarioAuth?.id,
+            detalle_tipo: detalleTipo
+        })
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        alert(data.error || "Error al aprobar material nuevo");
+        return;
+    }
+
+    cargarSolicitudesManager();
+}
+
+function renderSolicitudesManager(data){
+    const contenedor = document.getElementById("solicitudes_manager");
+    if (!contenedor) return;
+
+    if (!Array.isArray(data) || data.length === 0) {
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Sin requisiciones tipo nuevo pendientes por aprobar.</p>`);
+        return;
+    }
+
+    const agrupadas = {};
+    data.forEach(item => {
+        const reqId = Number(item.requisicion_id);
+        if (!agrupadas[reqId]) {
+            agrupadas[reqId] = { info: item, detalles: [] };
+        }
+        agrupadas[reqId].detalles.push(item);
+    });
+
+    const html = Object.keys(agrupadas)
+        .sort((a, b) => Number(b) - Number(a))
+        .map((reqId) => {
+            const req = agrupadas[reqId];
+            const filas = req.detalles.map((det) => `
+                <tr>
+                    <td>${det.material || "-"}</td>
+                    <td>Nuevo</td>
+                    <td>${det.cantidad_solicitada || 0}</td>
+                    <td>
+                        <div class="acciones-linea">
+                            <button onclick="aprobarDetalleManager(${det.detalle_id}, '${det.detalle_tipo}')">Aceptar</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join("");
+
+            return `
+                <div class="card" style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        <h4 style="margin:0;">Requisicion #${reqId}</h4>
+                        <span style="font-size:.9rem; opacity:.8;">Pendientes manager: ${req.detalles.length}</span>
+                    </div>
+                    <div class="requisicion-meta-grid">
+                        <p><strong>Solicitante:</strong> ${req.info.solicitante || "-"} (${req.info.numero_id || "-"})</p>
+                        <p><strong>Linea:</strong> ${req.info.linea_nombre || "-"}</p>
+                        <p><strong>Turno:</strong> ${req.info.turno || "-"}</p>
+                        <p><strong>Seccion:</strong> ${formatearTipoOrigen(req.info.tipo_origen)}</p>
+                        <p><strong>Fecha envio:</strong> ${formatearFechaHora(req.info.fecha)}</p>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Material</th>
+                                <th>Tipo movimiento</th>
+                                <th>Cantidad</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>
+            `;
+        })
+        .join("");
+
+    actualizarHtmlSinParpadeo(contenedor, html);
+}
+
+async function cargarSolicitudesManager(){
+    const contenedor = document.getElementById("solicitudes_manager");
+    if (contenedor && !contenedor.innerHTML.trim()) {
+        actualizarHtmlSinParpadeo(contenedor, "<p style='margin:0;'>Cargando...</p>");
+    }
+
+    try {
+        const response = await fetch("/requisiciones-pendientes-manager");
+        const data = await response.json().catch(() => []);
+
+        if (!response.ok) {
+            actualizarHtmlSinParpadeo(
+                contenedor,
+                `<p style="margin:0;">No se pudo cargar requisiciones tipo nuevo para manager (HTTP ${response.status}).</p>`
+            );
+            return;
+        }
+
+        renderSolicitudesManager(data);
+    } catch (error) {
+        console.error(error);
+        actualizarHtmlSinParpadeo(contenedor, `<p style="margin:0;">Error al cargar requisiciones pendientes de manager.</p>`);
+    }
+}
+
+mostrarSeccionManager("aprobaciones");
+
+setInterval(() => {
+    const usuarioSesion = JSON.parse(localStorage.getItem("usuario") || "null");
+    validarSesionActivaConLimite(usuarioSesion);
+}, 10000);
+
+setInterval(() => {
+    if (document.hidden) return;
+    cargarSolicitudesManager();
+}, 5000);
+</script>
+</body>
+</html>

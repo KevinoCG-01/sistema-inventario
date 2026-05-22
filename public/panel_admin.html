@@ -382,7 +382,7 @@ td.col-imagen {
 <button class="side-menu-item" data-seccion="materiales" onclick="mostrarSeccion('materiales')">Materiales Ensamble</button>
 <button class="side-menu-item" data-seccion="herramienta_modulo" onclick="mostrarSeccion('herramienta_modulo')">Herramienta de modulo</button>
 <button class="side-menu-item" data-seccion="equipos" onclick="mostrarSeccion('equipos')">Equipos</button>
-<button class="side-menu-item" data-seccion="solicitudes" onclick="mostrarSeccion('solicitudes')">Solicitudes</button>
+<button class="side-menu-item" data-seccion="solicitudes" onclick="mostrarSeccion('solicitudes')">Aprobaciones Nuevo</button>
 <button class="side-menu-item" data-seccion="material_lineas" onclick="mostrarSeccion('material_lineas')">Material por Linea</button>
 <button class="side-menu-item" data-seccion="usuarios" onclick="abrirUsuarios()">Usuarios</button>
 <button class="side-menu-item" data-seccion="horarios" onclick="mostrarSeccion('horarios')">Control Horarios</button>
@@ -576,24 +576,7 @@ style="margin-bottom:15px; padding:8px; width:300px;">
 <!-- ================= SOLICITUDES ================= -->
 <div id="solicitudes" class="seccion">
 
-<h2>Solicitudes Pendientes</h2>
-
-<table>
-<thead>
-<tr>
-<th>Tecnico de PFA</th>
-<th>Equipo</th>
-<th>Li­nea</th>
-<th>Fecha</th>
-<th>Accion</th>
-</tr>
-</thead>
-<tbody id="tabla_solicitudes"></tbody>
-</table>
-
-<hr style="margin:20px 0;">
-
-<h3 style="margin:0 0 10px 0;">Requisiciones de material pendientes (tipo Nuevo)</h3>
+<h2>Requisiciones de material pendientes (tipo Nuevo)</h2>
 <div id="solicitudes_material_pendientes"></div>
 
 </div>
@@ -644,11 +627,12 @@ style="margin-bottom:15px; padding:8px; width:300px;">
         <label>Numero de Usuario (ID):</label>
         <input type="text" id="numero_id_usuario" placeholder="Ej: KCH001 o 12345">
 
-        <label>Tecnico de PFA / Supervisor de PFA / Tecnico de Instrumentacion:</label>
+        <label>Tecnico de PFA / Supervisor de PFA / Tecnico de Instrumentacion / Manager:</label>
         <select id="rol_usuario">
             <option value="tecnico">Tecnico de PFA</option>
             <option value="empleado">Supervisor de PFA</option>
             <option value="supervisor">Tecnico de Instrumentacion</option>
+            <option value="manager">Manager</option>
         </select>
 
         <label>Contraseña:</label>
@@ -675,10 +659,11 @@ style="margin-bottom:15px; padding:8px; width:300px;">
             <option value="tecnico">Tecnico de PFA</option>
             <option value="empleado">Supervisor de PFA</option>
             <option value="supervisor">Tecnico de Instrumentacion</option>
+            <option value="manager">Manager</option>
         </select>
     </div>
 
-    <h2>Tabla de usuarios: Supervisor de PFA, Tecnicos de PFA y Tecnico de Ins</h2>
+    <h2>Tabla de usuarios: Supervisor de PFA, Tecnicos de PFA, Tecnico de Ins y Manager</h2>
 
     <table border="1" cellpadding="8" style="width:100%; max-width:1200px;">
         <thead>
@@ -709,6 +694,7 @@ style="margin-bottom:15px; padding:8px; width:300px;">
         <option value="empleado">Supervisor de PFA</option>
         <option value="tecnico">Tecnico de PFA</option>
         <option value="supervisor">Tecnico de Instrumentacion</option>
+        <option value="manager">Manager</option>
         <option value="admin">Admin</option>
     </select>
 
@@ -1938,66 +1924,14 @@ fila.style.display=texto.includes(filtro) ? "" : "none";
 /* ================= SOLICITUDES ================= */
 
 async function cargarSolicitudes(){
-
-    const tabla = document.getElementById("tabla_solicitudes");
     const contenedorMaterial = document.getElementById("solicitudes_material_pendientes");
-    if (tabla && !tabla.innerHTML.trim()) {
-        actualizarHtmlSinParpadeoAdmin(tabla, `<tr><td colspan="5">Cargando...</td></tr>`);
-    }
     if (contenedorMaterial && !contenedorMaterial.innerHTML.trim()) {
         actualizarHtmlSinParpadeoAdmin(contenedorMaterial, "<p style='margin:0;'>Cargando...</p>");
     }
 
     try {
-        const [resPendientes, resDev, resMaterial] = await Promise.all([
-            fetch("/asignaciones/pendientes"),
-            fetch("/asignaciones/devoluciones-pendientes"),
-            fetch("/requisiciones-pendientes-admin")
-        ]);
-
-        const pendientes = await resPendientes.json().catch(() => []);
-        const devoluciones = await resDev.json().catch(() => []);
+        const resMaterial = await fetch("/requisiciones-pendientes-admin");
         const requisicionesMaterial = await resMaterial.json().catch(() => []);
-
-        if (tabla) {
-            const filasPendientes = pendientes.map((s) => `
-                <tr>
-                    <td>${s.tecnico}</td>
-                    <td>${s.equipo}</td>
-                    <td>${s.linea}</td>
-                    <td>${new Date(s.fecha_solicitud).toLocaleString()}</td>
-                    <td>
-                        <button onclick="aprobarSolicitud(${s.id})">Aprobar</button>
-                        <button onclick="rechazarSolicitud(${s.id})">Rechazar</button>
-                    </td>
-                </tr>
-            `);
-
-            const filasDevoluciones = devoluciones.map((s) => `
-                <tr style="background:#fff3cd;">
-                    <td>${s.tecnico}</td>
-                    <td>${s.equipo}</td>
-                    <td>${s.linea}</td>
-                    <td>Pendiente devolucion</td>
-                    <td>
-                        <button onclick="aprobarDevolucion(${s.id})">
-                            Aprobar devolucion
-                        </button>
-                        <button onclick="rechazarDevolucion(${s.id})">
-                            Rechazar devolucion
-                        </button>
-                    </td>
-                </tr>
-            `);
-
-            let htmlTabla = "";
-            if ((pendientes.length + devoluciones.length) === 0) {
-                htmlTabla = `<tr><td colspan="5">Sin solicitudes pendientes</td></tr>`;
-            } else {
-                htmlTabla = [...filasPendientes, ...filasDevoluciones].join("");
-            }
-            actualizarHtmlSinParpadeoAdmin(tabla, htmlTabla);
-        }
 
         if (!resMaterial.ok) {
             if (contenedorMaterial) {
@@ -2012,9 +1946,6 @@ async function cargarSolicitudes(){
         renderSolicitudesMaterialPendientes(requisicionesMaterial);
     } catch (error) {
         console.error(error);
-        if (tabla) {
-            actualizarHtmlSinParpadeoAdmin(tabla, `<tr><td colspan="5">Error al cargar solicitudes</td></tr>`);
-        }
         if (contenedorMaterial) {
             actualizarHtmlSinParpadeoAdmin(contenedorMaterial, `<p style="margin:0;">Error al cargar requisiciones pendientes de aprobacion.</p>`);
         }
@@ -2327,6 +2258,7 @@ function formatearRolUsuario(rol){
     if (rol === "tecnico") return "Tecnico de PFA";
     if (rol === "empleado") return "Supervisor de PFA";
     if (rol === "supervisor") return "Tecnico de Instrumentacion";
+    if (rol === "manager") return "Manager";
     return rol || "-";
 }
 
@@ -2469,7 +2401,7 @@ async function editarUsuario(id, nombreActual, numeroActual, rolActual){
         return;
     }
 
-    const rolNuevo = prompt("Editar rol (tecnico de pfa/supervisor de pfa/tecnico de instrumentacion):", rolActual);
+    const rolNuevo = prompt("Editar rol (tecnico de pfa/supervisor de pfa/tecnico de instrumentacion/manager):", rolActual);
     if (rolNuevo === null) return;
     let rol = rolNuevo.trim().toLowerCase();
     if (rol === "tecnico de pfa" || rol === "tecnico_pfa" || rol === "pfa tecnico" || rol === "tecnico") {
@@ -2481,7 +2413,10 @@ async function editarUsuario(id, nombreActual, numeroActual, rolActual){
     if (rol === "tecnico de instrumentacion" || rol === "tecnico_de_instrumentacion" || rol === "instrumentacion") {
         rol = "supervisor";
     }
-    if (!["tecnico", "empleado", "supervisor"].includes(rol)) {
+    if (rol === "manager de pfa" || rol === "manager_pfa" || rol === "gerente" || rol === "manager") {
+        rol = "manager";
+    }
+    if (!["tecnico", "empleado", "supervisor", "manager"].includes(rol)) {
         alert("Rol invalido");
         return;
     }
@@ -2708,7 +2643,7 @@ document.addEventListener("click", (e) => {
 });
 
 const DURACION_SESION_MS = 10 * 60 * 1000;
-const ROLES_SESION_CORTA = new Set(["admin", "supervisor", "tecnico", "empleado"]);
+const ROLES_SESION_CORTA = new Set(["admin", "supervisor", "tecnico", "empleado", "manager"]);
 let redirigiendoPorSesionExpirada = false;
 
 function validarSesionActivaConLimite(usuarioActual){

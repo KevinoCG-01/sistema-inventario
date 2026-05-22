@@ -647,8 +647,9 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
         const tieneNuevoSinDecision = req.detalles.some((d) => {
             const mov = String(d.tipo_movimiento || "").trim().toLowerCase();
             const estadoDet = String(d.estado || "").trim().toLowerCase();
-            const aprobado = d.aprobado_supervisor === true || String(d.aprobado_supervisor).toLowerCase() === "true";
-            return mov === "nuevo" && estadoDet !== "rechazada" && !aprobado;
+            const aprobadoAdmin = d.aprobado_supervisor === true || String(d.aprobado_supervisor).toLowerCase() === "true";
+            const aprobadoManager = d.aprobado_manager === true || String(d.aprobado_manager).toLowerCase() === "true";
+            return mov === "nuevo" && estadoDet !== "rechazada" && !(aprobadoAdmin && aprobadoManager);
         });
         const botonRechazarReq = tieneNuevoSinDecision
             ? ""
@@ -692,7 +693,8 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
             const pendienteCalculado = det.cantidad_solicitada - det.cantidad_entregada;
             const pendiente = esRechazada ? 0 : pendienteCalculado;
             const mov = String(det.tipo_movimiento || "").trim().toLowerCase();
-            const aprobadoSupervisor = det.aprobado_supervisor === true || String(det.aprobado_supervisor).toLowerCase() === "true";
+            const aprobadoAdmin = det.aprobado_supervisor === true || String(det.aprobado_supervisor).toLowerCase() === "true";
+            const aprobadoManager = det.aprobado_manager === true || String(det.aprobado_manager).toLowerCase() === "true";
             let boton = "Completo";
 
             if (esRechazada) {
@@ -701,7 +703,7 @@ async function renderRequisiciones(contenedorId, url, prefijoInput, detalleTipo)
                 const accionTexto = mov.startsWith("retorno")
                     ? "Recibido"
                     : "Entregar";
-                if (mov === "nuevo" && !aprobadoSupervisor) {
+                if (mov === "nuevo" && !(aprobadoAdmin && aprobadoManager)) {
                     boton = "-";
                 } else {
                     boton = `
